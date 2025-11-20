@@ -28,7 +28,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 
 const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactElement, adminOnly?: boolean }) => {
   const { user, loading } = useStore();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gold-500 bg-navy-950">جاري التحميل...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-gold-500">جاري التحميل...</div>;
   if (!user) return <Navigate to="/login" />;
   if (adminOnly && user.role !== 'admin') return <Navigate to="/" />;
   return children;
@@ -52,7 +52,8 @@ const AppContent = () => {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col bg-navy-950 text-white font-cairo">
+    // Removed bg-navy-950 to allow body gradient to show through
+    <div className="min-h-screen flex flex-col text-white font-cairo bg-transparent">
       <Navbar />
       <main className="flex-grow w-full">
         <Routes>

@@ -13,7 +13,8 @@ export const About: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-navy-950 page-padding-top pb-20 relative overflow-hidden">
+    // Removed bg-navy-950 to inherit body gradient
+    <div className="min-h-screen page-padding-top pb-20 relative overflow-hidden">
       {/* Background Elements */}
       <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gold-500/5 blur-[150px] rounded-full -z-10"></div>
       <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-blue-600/5 blur-[150px] rounded-full -z-10"></div>
@@ -35,7 +36,7 @@ export const About: React.FC = () => {
         {/* Vision & Mission Cards */}
         <div className="grid md:grid-cols-2 gap-8 mb-24 max-w-6xl mx-auto">
           {/* Mission */}
-          <div className="bg-[#0f172a] border border-gold-500/30 rounded-3xl p-10 text-center hover:shadow-[0_0_30px_rgba(255,215,0,0.1)] transition-all duration-300 relative overflow-hidden group">
+          <div className="glass-card p-10 text-center hover:shadow-[0_0_30px_rgba(255,215,0,0.1)] transition-all duration-300 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold-500 to-transparent opacity-50"></div>
             <div className="flex justify-center mb-6">
                <Award className="text-gold-500 w-12 h-12" strokeWidth={1.5} />
@@ -47,7 +48,7 @@ export const About: React.FC = () => {
           </div>
 
           {/* Vision */}
-          <div className="bg-[#0f172a] border border-gold-500/30 rounded-3xl p-10 text-center hover:shadow-[0_0_30px_rgba(255,215,0,0.1)] transition-all duration-300 relative overflow-hidden group">
+          <div className="glass-card p-10 text-center hover:shadow-[0_0_30px_rgba(255,215,0,0.1)] transition-all duration-300 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold-500 to-transparent opacity-50"></div>
             <div className="flex justify-center mb-6">
                <Target className="text-gold-500 w-12 h-12" strokeWidth={1.5} />

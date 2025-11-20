@@ -39,7 +39,7 @@ export const Navbar: React.FC = () => {
   );
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[100] flex flex-col shadow-2xl bg-navy-950">
+    <div className="fixed top-0 left-0 right-0 z-[100] flex flex-col shadow-2xl bg-transparent">
       {/* 1. Main Navbar (Fixed Top) */}
       <nav className={`w-full transition-all duration-300 border-b border-white/5 relative z-[102] ${scrolled ? 'bg-navy-950/95 backdrop-blur-xl py-2' : 'bg-navy-900/95 backdrop-blur-lg py-3'}`}>
         <div className="container-custom flex items-center justify-between h-full">
@@ -138,8 +138,8 @@ export const Navbar: React.FC = () => {
         </div>
       </nav>
 
-      {/* 2. Ticker Bar (Fixed Below Navbar) */}
-      <div className="h-10 bg-navy-950 relative z-[101] border-b border-white/5">
+      {/* 2. Ticker Bar (Fixed Below Navbar) - Transparent Background */}
+      <div className="h-10 bg-navy-900/60 backdrop-blur-md relative z-[101] border-b border-white/5">
          <MarketTicker />
       </div>
     </div>

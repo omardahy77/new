@@ -8,7 +8,8 @@ export const Courses: React.FC = () => {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-navy-950 pt-40 pb-20">
+    // Removed bg-navy-950 to inherit body gradient
+    <div className="min-h-screen pt-40 pb-20">
       <div className="container-custom">
         {/* Header */}
         <div className="text-center mb-16 animate-fade-in">
@@ -27,10 +28,10 @@ export const Courses: React.FC = () => {
             return (
               <div 
                 key={course.id} 
-                className="group glass-card overflow-hidden flex flex-col lg:flex-row hover:border-gold-500/30 transition-all duration-500 bg-navy-900"
+                className="group glass-card overflow-hidden flex flex-col lg:flex-row hover:border-gold-500/30 transition-all duration-500"
                 style={{ animationDelay: `${idx * 100}ms` }}
               >
-                {/* Image Section (Right on Desktop due to RTL) */}
+                {/* Image Section */}
                 <div className="lg:w-1/3 relative h-64 lg:h-auto overflow-hidden bg-black">
                   {course.thumbnail ? (
                     <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />

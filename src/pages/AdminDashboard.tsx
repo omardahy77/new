@@ -3,7 +3,7 @@ import { useStore } from '../context/Store';
 import { useToast } from '../context/ToastContext';
 import { supabase } from '../lib/supabase';
 import { User, Course, SiteSettings } from '../types';
-import { Users, BookOpen, Settings, CheckCircle, Plus, Trash2, Save, UserPlus, Search, Filter } from 'lucide-react';
+import { Users, BookOpen, Settings, CheckCircle, Plus, Trash2, Save, UserPlus, Search, Facebook, Instagram, Send, FileText, BarChart3, Type } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
   const { user, siteSettings, updateSettings } = useStore();
@@ -21,7 +21,8 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     fetchUsers();
     fetchCourses();
-  }, []);
+    setLocalSettings(siteSettings);
+  }, [siteSettings]);
 
   const fetchUsers = async () => {
     const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
@@ -70,8 +71,12 @@ export const AdminDashboard: React.FC = () => {
   };
   
   const handleSaveSettings = async () => {
-      await updateSettings(localSettings);
-      showToast('تم حفظ إعدادات الموقع بنجاح', 'success');
+      try {
+        await updateSettings(localSettings);
+        showToast('تم حفظ إعدادات الموقع وتحديث قاعدة البيانات فوراً', 'success');
+      } catch (error) {
+        showToast('حدث خطأ أثناء الحفظ', 'error');
+      }
   };
 
   const pendingUsers = usersList.filter(u => u.status === 'pending');
@@ -110,7 +115,7 @@ export const AdminDashboard: React.FC = () => {
                   <BookOpen size={18} /> إدارة الكورسات
                 </button>
                 <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-gold-500 text-navy-950 font-bold shadow-lg shadow-gold-500/20' : 'hover:bg-white/5 text-gray-300'}`}>
-                  <Settings size={18} /> إعدادات الموقع
+                  <Settings size={18} /> إعدادات الموقع (CMS)
                 </button>
               </nav>
             </div>
@@ -281,34 +286,160 @@ export const AdminDashboard: React.FC = () => {
                  </div>
               )}
 
-              {/* Settings Tab */}
+              {/* Settings Tab - ENHANCED */}
               {activeTab === 'settings' && (
                 <div className="animate-fade-in max-w-2xl">
-                  <h2 className="text-xl font-bold mb-6 border-b border-white/10 pb-4 text-white">إعدادات الموقع (CMS)</h2>
+                  <h2 className="text-xl font-bold mb-6 border-b border-white/10 pb-4 text-white flex items-center gap-2">
+                    <Settings className="text-gold-500" size={24} /> إعدادات الموقع (CMS)
+                  </h2>
                   
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-sm font-bold text-gray-300 mb-2">اسم الموقع</label>
-                      <input 
-                        type="text" 
-                        value={localSettings.site_name}
-                        onChange={e => setLocalSettings({...localSettings, site_name: e.target.value})}
-                        className="w-full bg-navy-950 border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none text-white transition-colors"
-                      />
+                  <div className="space-y-6 h-[500px] overflow-y-auto custom-scrollbar pr-2">
+                    {/* General Info */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                        <FileText size={14} /> المعلومات الأساسية
+                      </h3>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-300 mb-2">اسم الموقع</label>
+                        <input 
+                          type="text" 
+                          value={localSettings.site_name}
+                          onChange={e => setLocalSettings({...localSettings, site_name: e.target.value})}
+                          className="w-full bg-navy-950 border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none text-white transition-colors"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-bold text-gray-300 mb-2">وصف الهيرو (الرئيسية)</label>
-                      <textarea 
-                        value={localSettings.hero_desc}
-                        onChange={e => setLocalSettings({...localSettings, hero_desc: e.target.value})}
-                        className="w-full bg-navy-950 border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none h-32 text-white transition-colors leading-relaxed"
-                      />
-                      <p className="text-xs text-gray-500 mt-2">هذا النص يظهر في الواجهة الرئيسية للزوار.</p>
+
+                    {/* Hero Texts Section (New) */}
+                    <div className="border-t border-white/10 pt-6">
+                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <Type size={14} /> نصوص الصفحة الرئيسية (Hero)
+                      </h3>
+                      <div className="grid grid-cols-1 gap-4 mb-4">
+                        <div>
+                          <label className="block text-sm font-bold text-gray-300 mb-2">العنوان الرئيسي - السطر الأول</label>
+                          <input 
+                            type="text" 
+                            placeholder="مثال: تداول بذكاء"
+                            value={localSettings.hero_title_line1 || ''}
+                            onChange={e => setLocalSettings({...localSettings, hero_title_line1: e.target.value})}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-gray-300 mb-2">العنوان الرئيسي - السطر الثاني (باللون الذهبي)</label>
+                          <input 
+                            type="text" 
+                            placeholder="مثال: بدقة القناص"
+                            value={localSettings.hero_title_line2 || ''}
+                            onChange={e => setLocalSettings({...localSettings, hero_title_line2: e.target.value})}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-300 mb-2">الوصف التفصيلي</label>
+                        <textarea 
+                          value={localSettings.hero_desc}
+                          onChange={e => setLocalSettings({...localSettings, hero_desc: e.target.value})}
+                          className="w-full bg-navy-950 border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none h-24 text-white transition-colors leading-relaxed"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Stats Section */}
+                    <div className="border-t border-white/10 pt-6">
+                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <BarChart3 size={14} /> الإحصائيات (تظهر في صفحة من نحن)
+                      </h3>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-bold text-gray-300 mb-2">عدد الطلاب</label>
+                          <input 
+                            type="text" 
+                            value={localSettings.stats?.students || ''}
+                            onChange={e => setLocalSettings({
+                              ...localSettings, 
+                              stats: { ...localSettings.stats, students: e.target.value }
+                            })}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-gray-300 mb-2">عدد الساعات التدريبية</label>
+                          <input 
+                            type="text" 
+                            value={localSettings.stats?.hours || ''}
+                            onChange={e => setLocalSettings({
+                              ...localSettings, 
+                              stats: { ...localSettings.stats, hours: e.target.value }
+                            })}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Social Links Section */}
+                    <div className="border-t border-white/10 pt-6">
+                      <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <Send size={14} /> روابط التواصل الاجتماعي
+                      </h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="flex items-center gap-2 text-sm font-bold text-gray-300 mb-2">
+                            <Facebook size={16} className="text-blue-500" /> فيسبوك (يظهر في الفوتر وصفحة تواصل معنا)
+                          </label>
+                          <input 
+                            type="text"
+                            dir="ltr"
+                            placeholder="https://facebook.com/..."
+                            value={localSettings.social_links?.facebook || ''}
+                            onChange={e => setLocalSettings({
+                              ...localSettings, 
+                              social_links: { ...localSettings.social_links, facebook: e.target.value }
+                            })}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-2 text-sm font-bold text-gray-300 mb-2">
+                            <Instagram size={16} className="text-pink-500" /> انستجرام
+                          </label>
+                          <input 
+                            type="text"
+                            dir="ltr"
+                            placeholder="https://instagram.com/..."
+                            value={localSettings.social_links?.instagram || ''}
+                            onChange={e => setLocalSettings({
+                              ...localSettings, 
+                              social_links: { ...localSettings.social_links, instagram: e.target.value }
+                            })}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                        <div>
+                          <label className="flex items-center gap-2 text-sm font-bold text-gray-300 mb-2">
+                            <Send size={16} className="text-blue-400" /> تليجرام
+                          </label>
+                          <input 
+                            type="text"
+                            dir="ltr"
+                            placeholder="https://t.me/..."
+                            value={localSettings.social_links?.telegram || ''}
+                            onChange={e => setLocalSettings({
+                              ...localSettings, 
+                              social_links: { ...localSettings.social_links, telegram: e.target.value }
+                            })}
+                            className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 focus:border-gold-500 outline-none text-white transition-colors"
+                          />
+                        </div>
+                      </div>
                     </div>
                     
-                    <div className="pt-4">
-                      <button onClick={handleSaveSettings} className="bg-gold-500 text-navy-950 px-8 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-gold-400 transition-colors shadow-lg shadow-gold-500/20">
-                        <Save size={18} /> حفظ التغييرات
+                    <div className="pt-4 pb-8">
+                      <button onClick={handleSaveSettings} className="bg-gold-500 text-navy-950 px-8 py-4 rounded-xl font-bold flex items-center gap-2 hover:bg-gold-400 transition-colors shadow-lg shadow-gold-500/20 w-full justify-center text-lg">
+                        <Save size={20} /> حفظ التغييرات وتحديث الموقع
                       </button>
                     </div>
                   </div>

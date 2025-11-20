@@ -36,7 +36,7 @@ export const Register: React.FC = () => {
 
   if (success) {
     return (
-      <div className="min-h-screen flex flex-col pt-[160px] pb-10 bg-navy-950 relative overflow-hidden items-center justify-center">
+      <div className="min-h-screen flex flex-col pt-[160px] pb-10 relative overflow-hidden items-center justify-center">
         <div className="glass-card p-10 max-w-md w-full text-center border-green-500/30 shadow-[0_0_50px_rgba(16,185,129,0.1)] relative z-10">
           <div className="w-24 h-24 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-8 border border-green-500/20 animate-pulse-slow">
             <CheckCircle2 size={48} className="text-green-500" />
@@ -52,7 +52,8 @@ export const Register: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col pt-[160px] pb-10 bg-navy-950 relative overflow-hidden">
+    // إزالة bg-navy-950
+    <div className="min-h-screen flex flex-col pt-[160px] pb-10 relative overflow-hidden">
       <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
       
       <div className="w-full max-w-md mx-auto px-4 relative z-10 my-auto">
@@ -60,7 +61,7 @@ export const Register: React.FC = () => {
           <Logo className="scale-125" />
         </div>
         
-        <div className="bg-navy-900/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-10 shadow-2xl">
+        <div className="glass-card p-8 md:p-10 shadow-2xl">
           <h2 className="text-3xl font-bold text-center mb-2 text-white">انضم إلى النخبة</h2>
           <p className="text-center text-gray-400 mb-8 text-sm">أنشئ حسابك وابدأ رحلة التداول الاحترافي</p>
 

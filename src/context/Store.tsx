@@ -26,9 +26,9 @@ const defaultSettings: SiteSettings = {
   social_links: { 
     telegram: "https://t.me", 
     instagram: "https://instagram.com", 
-    youtube: "https://youtube.com" 
+    youtube: "https://youtube.com",
+    facebook: "https://facebook.com"
   },
-  // Extended Defaults
   home_features: [
     { title: "تحليل فني متقدم", description: "تعلم استراتيجيات التحليل الفني التي تستخدمها البنوك الكبرى.", icon: "LineChart" },
     { title: "إدارة مخاطر صارمة", description: "كيف تحمي رأس مالك وتضاعف أرباحك بأقل مخاطرة ممكنة.", icon: "Shield" },
@@ -37,16 +37,8 @@ const defaultSettings: SiteSettings = {
   ],
   about_title: "من نحن",
   about_desc: "نحن أكاديمية رائدة في مجال تعليم تداول الذهب والفوركس، نسعى لبناء جيل من المتداولين المحترفين.",
-  about_sections: [
-    { title: "رؤيتنا", description: "أن نكون المرجع الأول للمتداول العربي في أسواق المال العالمية.", icon: "Eye" },
-    { title: "رسالتنا", description: "تقديم محتوى تعليمي عالي الجودة يجمع بين النظرية والتطبيق العملي.", icon: "Target" }
-  ],
-  statistics: [
-    { label: "طالب متخرج", value: "+1500" },
-    { label: "ساعة تدريبية", value: "+50" },
-    { label: "نسبة نجاح", value: "92%" },
-    { label: "دعم فني", value: "24/7" }
-  ]
+  about_sections: [],
+  statistics: []
 };
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -78,7 +70,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
     if (data) {
-      // Enhance courses with UI mock data if missing
       const enhancedCourses = data.map((c: any) => ({
         ...c,
         level: c.level || 'متوسط',
@@ -92,13 +83,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const fetchSettings = async () => {
     const { data } = await supabase.from('site_settings').select('*').single();
     if (data) {
-      // Merge DB data with extended defaults (since DB might lack new JSON fields)
       setSiteSettings({
         ...defaultSettings,
         ...data,
         social_links: { ...defaultSettings.social_links, ...(data.social_links || {}) },
         stats: { ...defaultSettings.stats, ...(data.stats || {}) }
       });
+    } else {
+      // If no settings exist, create default row
+      const { data: newData, error } = await supabase.from('site_settings').insert(defaultSettings).select().single();
+      if (newData && !error) {
+         setSiteSettings({ ...defaultSettings, ...newData });
+      }
     }
   };
 
@@ -135,9 +131,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
     if (siteSettings.id) {
       const { error } = await supabase.from('site_settings').update(newSettings).eq('id', siteSettings.id);
-      if (!error) setSiteSettings({ ...siteSettings, ...newSettings });
-    } else {
-      // Handle insert if needed
+      if (!error) {
+        setSiteSettings(prev => ({ ...prev, ...newSettings }));
+      } else {
+        console.error("Error updating settings:", error);
+        throw error;
+      }
     }
   };
 

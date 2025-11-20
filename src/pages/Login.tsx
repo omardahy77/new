@@ -26,18 +26,18 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col pt-[160px] pb-10 bg-navy-950 relative overflow-hidden">
+    // إزالة bg-navy-950
+    <div className="min-h-screen flex flex-col pt-[160px] pb-10 relative overflow-hidden">
       {/* Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
       <div className="absolute top-1/4 -right-20 w-96 h-96 bg-gold-500/5 rounded-full blur-[100px] pointer-events-none"></div>
       
-      {/* Content Container - Centered vertically in remaining space */}
       <div className="w-full max-w-md mx-auto px-4 relative z-10 my-auto">
         <div className="flex justify-center mb-8">
           <Logo className="scale-125" />
         </div>
         
-        <div className="bg-navy-900/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 md:p-10 shadow-2xl">
+        <div className="glass-card p-8 md:p-10 shadow-2xl">
           <h2 className="text-3xl font-bold text-center mb-2 text-white">مرحباً بعودتك</h2>
           <p className="text-center text-gray-400 mb-8 text-sm">سجل دخولك للمتابعة في رحلة الاحتراف</p>
 

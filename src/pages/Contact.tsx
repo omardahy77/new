@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../context/Store';
-import { Facebook, Send, Instagram, ExternalLink, Mail, MapPin } from 'lucide-react';
+import { Facebook, Send, Instagram, ExternalLink } from 'lucide-react';
 
 export const Contact: React.FC = () => {
   const { siteSettings } = useStore();
@@ -10,7 +10,7 @@ export const Contact: React.FC = () => {
       key: 'facebook',
       name: 'Facebook',
       icon: Facebook,
-      color: '#1877F2', // Official FB Blue
+      color: '#1877F2',
       bg: 'bg-[#1877F2]/10',
       border: 'border-[#1877F2]/20',
       link: siteSettings.social_links.facebook,
@@ -21,7 +21,7 @@ export const Contact: React.FC = () => {
       key: 'instagram',
       name: 'Instagram',
       icon: Instagram,
-      color: '#E4405F', // Official Insta Pink
+      color: '#E4405F',
       bg: 'bg-[#E4405F]/10',
       border: 'border-[#E4405F]/20',
       link: siteSettings.social_links.instagram,
@@ -32,7 +32,7 @@ export const Contact: React.FC = () => {
       key: 'telegram',
       name: 'Telegram',
       icon: Send,
-      color: '#229ED9', // Official Telegram Blue
+      color: '#229ED9',
       bg: 'bg-[#229ED9]/10',
       border: 'border-[#229ED9]/20',
       link: siteSettings.social_links.telegram,
@@ -42,7 +42,8 @@ export const Contact: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-navy-950 page-padding-top pb-20 relative overflow-hidden">
+    // Removed bg-navy-950 to inherit body gradient
+    <div className="min-h-screen page-padding-top pb-20 relative overflow-hidden">
       <div className="container-custom">
         <div className="text-center max-w-3xl mx-auto mb-20 animate-fade-in pt-10">
           <h1 className="text-5xl font-black text-white mb-6">تواصل معنا</h1>
@@ -59,7 +60,7 @@ export const Contact: React.FC = () => {
                 href={card.link} 
                 target="_blank" 
                 rel="noreferrer"
-                className={`bg-[#0f172a] border ${card.border} rounded-[2rem] p-10 flex flex-col items-center text-center group hover:bg-navy-900 transition-all duration-300 shadow-lg hover:-translate-y-2 relative overflow-hidden`}
+                className={`glass-card border ${card.border} rounded-[2rem] p-10 flex flex-col items-center text-center group hover:bg-navy-900 transition-all duration-300 shadow-lg hover:-translate-y-2 relative overflow-hidden`}
               >
                 <div className={`absolute top-0 left-0 w-full h-1 bg-${card.color} opacity-50`}></div>
                 
@@ -83,28 +84,6 @@ export const Contact: React.FC = () => {
               </a>
             )
           ))}
-        </div>
-
-        {/* Additional Contact Info */}
-        <div className="grid md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-           <div className="glass-card p-6 flex items-center gap-4">
-              <div className="w-12 h-12 bg-navy-800 rounded-full flex items-center justify-center text-gold-500 border border-white/10">
-                <Mail size={24} />
-              </div>
-              <div>
-                <h4 className="text-white font-bold">البريد الإلكتروني</h4>
-                <p className="text-gray-400 text-sm">support@sniperfx.com</p>
-              </div>
-           </div>
-           <div className="glass-card p-6 flex items-center gap-4">
-              <div className="w-12 h-12 bg-navy-800 rounded-full flex items-center justify-center text-gold-500 border border-white/10">
-                <MapPin size={24} />
-              </div>
-              <div>
-                <h4 className="text-white font-bold">المقر الرئيسي</h4>
-                <p className="text-gray-400 text-sm">دبي، الإمارات العربية المتحدة</p>
-              </div>
-           </div>
         </div>
       </div>
     </div>
