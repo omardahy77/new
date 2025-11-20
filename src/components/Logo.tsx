@@ -1,10 +1,11 @@
 import React from 'react';
 import { useStore } from '../context/Store';
-import { Coins } from 'lucide-react';
 
 export const Logo: React.FC<{ className?: string }> = ({ className }) => {
   const { siteSettings } = useStore();
-  const logoUrl = siteSettings.logo_url;
+  // الرابط الدقيق للصورة التي طلبها المستخدم
+  const defaultLogo = "https://i.postimg.cc/Bb0PZ00P/tsmym-bdwn-wnwan-2.png";
+  const logoUrl = siteSettings.logo_url || defaultLogo;
 
   return (
     <div className={`flex items-center gap-3 select-none group ${className}`}>
@@ -15,17 +16,11 @@ export const Logo: React.FC<{ className?: string }> = ({ className }) => {
         group-hover:border-gold-400">
          
          {/* الصورة */}
-         {logoUrl ? (
-            <img
+         <img
             src={logoUrl}
             alt="Sniper FX Logo"
-            className="w-full h-full object-contain transform transition-transform duration-700 group-hover:scale-110"
-            />
-         ) : (
-             <div className="w-full h-full flex items-center justify-center bg-navy-900">
-                 <Coins className="text-gold-500 w-8 h-8" />
-             </div>
-         )}
+            className="w-full h-full object-cover transform transition-transform duration-700 group-hover:scale-110"
+         />
          
          {/* تأثير اللمعة الزجاجية */}
          <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -51,11 +46,8 @@ export const Logo: React.FC<{ className?: string }> = ({ className }) => {
                     <stop offset="100%" stopColor="#E6B800" />
                 </linearGradient>
              </defs>
-             {/* Top Face */}
              <path d="M5 8L7 4H17L19 8H5Z" fill="url(#goldBarGradient)" stroke="#E6B800" strokeWidth="0.5"/>
-             {/* Front Face */}
              <path d="M5 8V16C5 17.1 5.9 18 7 18H17C18.1 18 19 17.1 19 16V8H5Z" fill="url(#goldBarGradient)" fillOpacity="0.9" stroke="#E6B800" strokeWidth="0.5"/>
-             {/* Shine Line */}
              <path d="M8 13H16" stroke="#B48E00" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>

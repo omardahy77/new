@@ -1,13 +1,15 @@
 export interface User {
   id: string;
   email: string;
+  full_name?: string;
+  phone_number?: string;
   role: 'admin' | 'student';
   status: 'pending' | 'active';
   created_at?: string;
 }
 
 export interface Lesson {
-  id: string;
+  id?: string;
   course_id: string;
   title: string;
   video_url: string;
@@ -25,9 +27,9 @@ export interface Course {
   rating: number;
   lessons?: Lesson[];
   created_at?: string;
-  level?: 'مبتدئ' | 'متوسط' | 'خبير'; // Added for UI
-  duration?: string; // Added for UI
-  lesson_count?: number; // Added for UI
+  level?: 'مبتدئ' | 'متوسط' | 'خبير';
+  duration?: string;
+  lesson_count?: number;
 }
 
 export interface Enrollment {
@@ -43,20 +45,15 @@ export interface Feature {
   icon: string;
 }
 
-export interface AboutSection {
-  title: string;
-  description: string;
-  icon: string;
-}
-
 export interface SiteSettings {
   id?: string;
   site_name: string;
-  hero_title: string; // Fallback if lines not present
+  hero_title: string;
   hero_title_line1?: string;
   hero_title_line2?: string;
   hero_desc: string;
   logo_url?: string;
+  maintenance_mode?: boolean; // New Field
   social_links: {
     telegram?: string;
     instagram?: string;
@@ -69,10 +66,9 @@ export interface SiteSettings {
     students: string;
     hours: string;
   };
-  // Extended CMS Fields (Mocked/JSONB in DB)
   home_features?: Feature[];
   about_title?: string;
   about_desc?: string;
-  about_sections?: AboutSection[];
-  statistics?: Array<{ label: string; value: string }>;
+  contact_title?: string;
+  contact_desc?: string;
 }

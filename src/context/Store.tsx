@@ -21,7 +21,8 @@ const defaultSettings: SiteSettings = {
   hero_title_line1: "تداول بذكاء",
   hero_title_line2: "بدقة القناص",
   hero_desc: "اكتشف أسرار صناعة السوق والمؤسسات المالية... نظام تعليمي (LMS) متكامل ومحمي يأخذك من الصفر إلى الاحتراف.",
-  logo_url: "",
+  logo_url: "https://i.postimg.cc/Bb0PZ00P/tsmym-bdwn-wnwan-2.png",
+  maintenance_mode: false,
   stats: { students: "+1500", hours: "+50" },
   social_links: { 
     telegram: "https://t.me", 
@@ -37,8 +38,8 @@ const defaultSettings: SiteSettings = {
   ],
   about_title: "من نحن",
   about_desc: "نحن أكاديمية رائدة في مجال تعليم تداول الذهب والفوركس، نسعى لبناء جيل من المتداولين المحترفين.",
-  about_sections: [],
-  statistics: []
+  contact_title: "تواصل معنا",
+  contact_desc: "فريق الدعم الفني جاهز للرد على استفساراتكم ومساعدتكم في رحلتكم التعليمية"
 };
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);

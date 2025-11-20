@@ -42,13 +42,14 @@ export const Contact: React.FC = () => {
   ];
 
   return (
-    // Removed bg-navy-950 to inherit body gradient
     <div className="min-h-screen page-padding-top pb-20 relative overflow-hidden">
       <div className="container-custom">
         <div className="text-center max-w-3xl mx-auto mb-20 animate-fade-in pt-10">
-          <h1 className="text-5xl font-black text-white mb-6">تواصل معنا</h1>
+          <h1 className="text-5xl font-black text-white mb-6">
+            {siteSettings.contact_title || "تواصل معنا"}
+          </h1>
           <p className="text-gray-400 text-lg">
-            فريق الدعم الفني جاهز للرد على استفساراتكم ومساعدتكم في رحلتكم التعليمية
+            {siteSettings.contact_desc || "فريق الدعم الفني جاهز للرد على استفساراتكم ومساعدتكم في رحلتكم التعليمية"}
           </p>
         </div>
 

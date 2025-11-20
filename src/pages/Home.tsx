@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   ArrowRight, Star, Play, Lock, Crown, 
   LineChart, Shield, Brain, Users, ArrowLeft,
-  Facebook, Instagram, Send, CheckCircle2, UserPlus, LogIn, Target
+  Facebook, Instagram, Send, CheckCircle2, UserPlus, LogIn, Target, LayoutDashboard
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 
@@ -24,11 +24,9 @@ export const Home: React.FC = () => {
   return (
     <div className="min-h-screen text-white relative overflow-x-hidden font-cairo selection:bg-gold-500 selection:text-navy-950">
       
-      {/* Global Ambient Glows (تأثيرات الإضاءة الخلفية) */}
+      {/* Global Ambient Glows */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        {/* إضاءة زرقاء في الأعلى اليسار */}
         <div className="absolute top-[-10%] left-[-10%] w-[600px] h-[600px] bg-blue-900/20 rounded-full blur-[120px] opacity-30"></div>
-        {/* إضاءة ذهبية في الأسفل اليمين */}
         <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-gold-500/10 rounded-full blur-[120px] opacity-20"></div>
       </div>
 
@@ -55,9 +53,17 @@ export const Home: React.FC = () => {
                 </span>
                 {user.role === 'admin' && <span className="px-4 py-1.5 rounded-full text-sm font-bold bg-gold-500/10 text-gold-400 border border-gold-500/20 shadow-[0_0_10px_rgba(255,215,0,0.1)]">مشرف</span>}
               </div>
-              <Link to="/courses" className="btn-gold px-12 py-4 text-lg inline-flex items-center gap-3 shadow-xl shadow-gold-500/20 hover:shadow-gold-500/40 transition-shadow">
-                <Play size={22} fill="currentColor" /> ابدأ التعلم الآن
-              </Link>
+              
+              <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <Link to="/courses" className="btn-gold px-12 py-4 text-lg inline-flex items-center justify-center gap-3 shadow-xl shadow-gold-500/20 hover:shadow-gold-500/40 transition-shadow">
+                  <Play size={22} fill="currentColor" /> ابدأ التعلم الآن
+                </Link>
+                {user.role === 'admin' && (
+                  <Link to="/admin" className="btn-glass px-8 py-4 text-lg font-bold inline-flex items-center justify-center gap-3 hover:bg-white/10">
+                    <LayoutDashboard size={22} /> لوحة التحكم
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -72,12 +78,10 @@ export const Home: React.FC = () => {
               المنصة العربية الأولى لاحتراف الذهب
             </div>
             
-            {/* Typography matching the image - Resized for professionalism */}
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-black mb-8 tracking-tight leading-[1.1]">
               <span className="block text-white drop-shadow-2xl z-0 relative">
                 {siteSettings.hero_title_line1 || "تداول بذكاء"}
               </span>
-              {/* Added mt-2 md:mt-4 to push the second line down */}
               <span className="block text-gold-500 drop-shadow-[0_0_25px_rgba(255,215,0,0.3)] relative z-10 mt-2 md:mt-4">
                 {siteSettings.hero_title_line2 || "بدقة القناص"}
               </span>
@@ -112,6 +116,7 @@ export const Home: React.FC = () => {
         )}
       </section>
 
+      {/* ... باقي الأقسام كما هي ... */}
       {/* ================= FEATURED COURSES ================= */}
       <section className="relative z-10 section-padding border-t border-white/5 bg-navy-950/30">
         <div className="container-custom">

@@ -13,7 +13,6 @@ export const About: React.FC = () => {
   ];
 
   return (
-    // Removed bg-navy-950 to inherit body gradient
     <div className="min-h-screen page-padding-top pb-20 relative overflow-hidden">
       {/* Background Elements */}
       <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gold-500/5 blur-[150px] rounded-full -z-10"></div>
@@ -26,10 +25,10 @@ export const About: React.FC = () => {
             <Logo />
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white mb-6">
-            عن المنصة
+            {siteSettings.about_title || "عن المنصة"}
           </h1>
           <p className="text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto">
-            ليست مجرد موقع تعليمي، بل هي أكاديمية متخصصة تهدف لتغيير مفهوم التداول في العالم العربي.
+            {siteSettings.about_desc || "ليست مجرد موقع تعليمي، بل هي أكاديمية متخصصة تهدف لتغيير مفهوم التداول في العالم العربي."}
           </p>
         </div>
 

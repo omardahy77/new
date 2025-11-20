@@ -24,7 +24,7 @@ export default {
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out',
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'scroll': 'scroll 60s linear infinite', // Increased duration for smoother speed
+        'scroll': 'scroll 40s linear infinite', // سرعة متوسطة ومناسبة للقراءة
         'shine': 'shine 1.5s ease-in-out infinite',
         'float': 'float 3s ease-in-out infinite',
       },
@@ -34,8 +34,8 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         scroll: {
-          '0%': { transform: 'translateX(-50%)' }, // Start from left (halfway because of duplication)
-          '100%': { transform: 'translateX(0)' },   // Move to right
+          '0%': { transform: 'translateX(0)' },      // يبدأ من البداية
+          '100%': { transform: 'translateX(-50%)' }, // يتحرك لليسار بمقدار نصف العرض (حيث أننا نكرر العناصر مرتين)
         },
         shine: {
           '0%': { left: '-100%' },
