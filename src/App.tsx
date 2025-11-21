@@ -1,18 +1,20 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider, useStore } from './context/Store';
 import { ToastProvider } from './context/ToastContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { Home } from './pages/Home';
-import { Courses } from './pages/Courses';
-import { About } from './pages/About';
-import { Contact } from './pages/Contact';
-import { Login } from './pages/Login';
-import { Register } from './pages/Register';
-import { CourseDetail } from './pages/CourseDetail';
-import { AdminDashboard } from './pages/AdminDashboard';
-import { Wrench } from 'lucide-react';
+import { Wrench, Loader2 } from 'lucide-react';
+
+// Lazy Load Pages for Better Performance
+const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
+const Courses = lazy(() => import('./pages/Courses').then(module => ({ default: module.Courses })));
+const About = lazy(() => import('./pages/About').then(module => ({ default: module.About })));
+const Contact = lazy(() => import('./pages/Contact').then(module => ({ default: module.Contact })));
+const Login = lazy(() => import('./pages/Login').then(module => ({ default: module.Login })));
+const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
+const CourseDetail = lazy(() => import('./pages/CourseDetail').then(module => ({ default: module.CourseDetail })));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
@@ -27,9 +29,16 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
+const LoadingScreen = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-gold-500">
+    <Loader2 size={48} className="animate-spin mb-4" />
+    <p className="text-lg font-bold animate-pulse">جاري التحميل...</p>
+  </div>
+);
+
 const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactElement, adminOnly?: boolean }) => {
   const { user, loading } = useStore();
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gold-500">جاري التحميل...</div>;
+  if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" />;
   if (adminOnly && user.role !== 'admin') return <Navigate to="/" />;
   return children;
@@ -69,10 +78,9 @@ const AppContent = () => {
     };
   }, []);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gold-500 bg-navy-950">جاري التحميل...</div>;
+  if (loading) return <LoadingScreen />;
 
-  // منطق وضع الصيانة:
-  // إذا كان مفعلاً، والمستخدم الحالي ليس مشرفاً (أو غير مسجل دخول)، والصفحة الحالية ليست صفحة الدخول
+  // منطق وضع الصيانة
   if (siteSettings.maintenance_mode && user?.role !== 'admin') {
     if (location.pathname !== '/login') {
        return <MaintenanceScreen />;
@@ -83,16 +91,18 @@ const AppContent = () => {
     <div className="min-h-screen flex flex-col text-white font-cairo bg-transparent">
       <Navbar />
       <main className="flex-grow w-full">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/courses" element={<Courses />} />
-          <Route path="/about" element={<About />} />
-          <Route path="/contact" element={<Contact />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
-        </Routes>
+        <Suspense fallback={<LoadingScreen />}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/courses" element={<Courses />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/contact" element={<Contact />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
+          </Routes>
+        </Suspense>
       </main>
       <Footer />
     </div>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { User, Course, SiteSettings, Enrollment } from '../types';
+import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types';
 
 interface StoreContextType {
   user: User | null;
@@ -13,6 +13,8 @@ interface StoreContextType {
   updateSettings: (settings: Partial<SiteSettings>) => Promise<void>;
   signOut: () => Promise<void>;
   checkAccess: (course: Course) => boolean;
+  saveLessonProgress: (lessonId: string, position: number, duration: number, isCompleted: boolean) => Promise<void>;
+  getLessonProgress: (lessonId: string) => Promise<LessonProgress | null>;
 }
 
 const defaultSettings: SiteSettings = {
@@ -52,32 +54,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    
-    if (data && !error) {
-      setUser(data as User);
-      const { data: enrollData } = await supabase
-        .from('enrollments')
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
         .select('*')
-        .eq('user_id', userId);
-      if (enrollData) setEnrollments(enrollData as Enrollment[]);
+        .eq('id', userId)
+        .single();
+      
+      if (data && !error) {
+        setUser(data as User);
+        const { data: enrollData } = await supabase
+          .from('enrollments')
+          .select('*')
+          .eq('user_id', userId);
+        if (enrollData) setEnrollments(enrollData as Enrollment[]);
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
     }
   };
 
   const fetchCourses = async () => {
     const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
     if (data) {
-      const enhancedCourses = data.map((c: any) => ({
-        ...c,
-        level: c.level || 'متوسط',
-        duration: c.duration || '15 ساعة',
-        lesson_count: c.lesson_count || 12
-      }));
-      setCourses(enhancedCourses as Course[]);
+      setCourses(data as Course[]);
     }
   };
 
@@ -88,10 +88,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         ...defaultSettings,
         ...data,
         social_links: { ...defaultSettings.social_links, ...(data.social_links || {}) },
-        stats: { ...defaultSettings.stats, ...(data.stats || {}) }
+        stats: { ...defaultSettings.stats, ...(data.stats || {}) },
+        home_features: data.home_features || defaultSettings.home_features
       });
     } else {
-      // If no settings exist, create default row
       const { data: newData, error } = await supabase.from('site_settings').insert(defaultSettings).select().single();
       if (newData && !error) {
          setSiteSettings({ ...defaultSettings, ...newData });
@@ -106,18 +106,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  // --- Progress Tracking ---
+  const saveLessonProgress = async (lessonId: string, position: number, duration: number, isCompleted: boolean) => {
+    if (!user) return;
+    
+    // Upsert progress
+    const { error } = await supabase.from('lesson_progress').upsert({
+      user_id: user.id,
+      lesson_id: lessonId,
+      position,
+      duration,
+      is_completed: isCompleted,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,lesson_id' });
+
+    if (error) console.error("Error saving progress:", error);
+  };
+
+  const getLessonProgress = async (lessonId: string): Promise<LessonProgress | null> => {
+    if (!user) return null;
+    const { data } = await supabase
+      .from('lesson_progress')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('lesson_id', lessonId)
+      .single();
+    return data as LessonProgress;
+  };
+
   useEffect(() => {
     fetchCourses();
     fetchSettings();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      } else {
-        setUser(null);
-        setEnrollments([]);
-      }
-      setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      setTimeout(async () => {
+        if (session?.user) {
+          await fetchProfile(session.user.id);
+        } else {
+          setUser(null);
+          setEnrollments([]);
+        }
+        setLoading(false);
+      }, 0);
     });
 
     return () => subscription.unsubscribe();
@@ -160,7 +190,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       refreshEnrollments,
       updateSettings,
       signOut,
-      checkAccess
+      checkAccess,
+      saveLessonProgress,
+      getLessonProgress
     }}>
       {children}
     </StoreContext.Provider>

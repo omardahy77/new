@@ -8,14 +8,34 @@ export interface User {
   created_at?: string;
 }
 
+export interface Subtitle {
+  id?: string;
+  lesson_id?: string;
+  lang: string;
+  label: string;
+  vtt_url: string;
+}
+
+export interface LessonProgress {
+  lesson_id: string;
+  position: number;
+  duration: number;
+  is_completed: boolean;
+  updated_at?: string;
+}
+
 export interface Lesson {
   id?: string;
   course_id: string;
   title: string;
+  description?: string;
   video_url: string;
-  thumbnail?: string;
+  thumbnail_url?: string;
   order: number;
   duration: string;
+  is_published?: boolean;
+  subtitles?: Subtitle[];
+  user_progress?: LessonProgress; // For frontend convenience
 }
 
 export interface Course {
@@ -53,7 +73,7 @@ export interface SiteSettings {
   hero_title_line2?: string;
   hero_desc: string;
   logo_url?: string;
-  maintenance_mode?: boolean; // New Field
+  maintenance_mode?: boolean;
   social_links: {
     telegram?: string;
     instagram?: string;
