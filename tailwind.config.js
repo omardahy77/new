@@ -13,18 +13,19 @@ export default {
         gold: {
           400: '#FFD700',
           500: '#FFC400',
-          600: '#E6B800',
+          600: '#B38F00',
         },
         navy: {
-          800: '#0f172a',
-          900: '#020617',
-          950: '#01030b',
+          // New Bluish-Navy Palette (Midnight Blue)
+          800: '#162032', // Lighter navy for hover states
+          900: '#0C1220', // Deep navy for cards/sidebars
+          950: '#040711', // Darkest navy (Background base) - Leaning towards blue, not black
         }
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-out',
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'scroll': 'scroll 40s linear infinite', // سرعة متوسطة ومناسبة للقراءة
+        'scroll': 'scroll 40s linear infinite',
         'shine': 'shine 1.5s ease-in-out infinite',
         'float': 'float 3s ease-in-out infinite',
       },
@@ -34,8 +35,8 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         scroll: {
-          '0%': { transform: 'translateX(0)' },      // يبدأ من البداية
-          '100%': { transform: 'translateX(-50%)' }, // يتحرك لليسار بمقدار نصف العرض (حيث أننا نكرر العناصر مرتين)
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
         },
         shine: {
           '0%': { left: '-100%' },
@@ -48,6 +49,7 @@ export default {
       },
       backgroundImage: {
         'gold-gradient': 'linear-gradient(135deg, #FFD700 0%, #FFC400 50%, #E6B800 100%)',
+        'navy-gradient': 'linear-gradient(to bottom, #0C1220, #040711)',
       }
     },
   },

@@ -1,23 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/Store';
 import { useToast } from '../context/ToastContext';
+import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
-import { User, Course, SiteSettings, Lesson, Feature } from '../types';
+import { User, Course, SiteSettings, Lesson } from '../types';
+import { calculateTotalDuration, processVideoUrl } from '../utils/videoHelpers';
 import { 
-  Users, BookOpen, Settings, CheckCircle, Plus, Trash2, Save, 
-  UserPlus, Search, Facebook, Instagram, Send, FileText, BarChart3, 
-  Type, Phone, Edit, Video, X, PlayCircle, Star, MessageCircle, Power,
-  AlignLeft, Edit2, Globe, Upload
+  Users, BookOpen, Settings, Plus, Trash2, 
+  UserPlus, Video, X, PlayCircle, Edit2,
+  FileText, Image as ImageIcon, Code,
+  Globe
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
   const { user, siteSettings, updateSettings, refreshCourses } = useStore();
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'courses' | 'settings'>('requests');
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'courses' | 'settings' | 'content'>('requests');
   const [usersList, setUsersList] = useState<User[]>([]);
   const [coursesList, setCoursesList] = useState<Course[]>([]);
   const [localSettings, setLocalSettings] = useState<SiteSettings>(siteSettings);
   
+  // Language Toggle for Editing
+  const [editingLang, setEditingLang] = useState<'ar' | 'en'>('ar');
+
   // Modals
   const [enrollModalOpen, setEnrollModalOpen] = useState(false);
   const [courseModalOpen, setCourseModalOpen] = useState(false);
@@ -34,12 +40,11 @@ export const AdminDashboard: React.FC = () => {
   
   // Lesson Form
   const [newLesson, setNewLesson] = useState<Partial<Lesson>>({ 
-    title: '', description: '', video_url: '', duration: '10:00', order: 1, is_published: true 
+    title: '', description: '', video_url: '', thumbnail_url: '', duration: '10:00', order: 1, is_published: true 
   });
   
-  // Subtitles State (Simple UI for now)
-  const [subtitleLang, setSubtitleLang] = useState('en');
-  const [subtitleUrl, setSubtitleUrl] = useState('');
+  // Content Sub-tabs
+  const [contentSubTab, setContentSubTab] = useState<'home' | 'about' | 'contact' | 'courses'>('home');
 
   useEffect(() => {
     fetchUsers();
@@ -68,55 +73,54 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // ... (User Actions & Course Actions remain the same, omitting for brevity but keeping in mind they exist) ...
   const handleApproveUser = async (userId: string) => {
     const { error } = await supabase.from('profiles').update({ status: 'active' }).eq('id', userId);
-    if (error) showToast(`فشل التفعيل: ${error.message}`, 'error');
-    else { showToast('تم تفعيل حساب العضو بنجاح', 'success'); fetchUsers(); }
+    if (error) showToast(`Failed: ${error.message}`, 'error');
+    else { showToast('User approved', 'success'); fetchUsers(); }
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if(!confirm('هل أنت متأكد من حذف هذا العضو؟')) return;
+    if(!confirm('Are you sure you want to delete this user?')) return;
     const { error } = await supabase.from('profiles').delete().eq('id', userId);
-    if (error) showToast(`فشل الحذف: ${error.message}`, 'error');
-    else { showToast('تم حذف العضو بنجاح', 'error'); fetchUsers(); }
+    if (error) showToast(`Failed: ${error.message}`, 'error');
+    else { showToast('User deleted', 'success'); fetchUsers(); }
   };
 
   const handleAddEnrollment = async () => {
     if (!selectedCourseId || !enrollEmail) return;
     const targetUser = usersList.find(u => u.email === enrollEmail);
-    if (!targetUser) { showToast('المستخدم غير موجود', 'error'); return; }
+    if (!targetUser) { showToast('User not found', 'error'); return; }
     const { error } = await supabase.from('enrollments').insert({ user_id: targetUser.id, course_id: selectedCourseId });
-    if (error) showToast('خطأ: ربما المستخدم مسجل بالفعل', 'error');
-    else { showToast('تم إضافة المستخدم للكورس بنجاح', 'success'); setEnrollEmail(''); setEnrollModalOpen(false); }
+    if (error) showToast('Error: User might already be enrolled', 'error');
+    else { showToast('User enrolled successfully', 'success'); setEnrollEmail(''); setEnrollModalOpen(false); }
   };
 
   const handleSaveCourse = async () => {
-    if (!editingCourse.title || !editingCourse.description) { showToast('يرجى ملء الحقول الأساسية', 'error'); return; }
+    if (!editingCourse.title || !editingCourse.description) { showToast('Please fill required fields', 'error'); return; }
     const courseData = {
       title: editingCourse.title, description: editingCourse.description, thumbnail: editingCourse.thumbnail,
       is_paid: editingCourse.is_paid || false, level: editingCourse.level || 'متوسط',
-      duration: editingCourse.duration || '0 ساعة', rating: editingCourse.rating || 5,
+      duration: editingCourse.duration || '0 دقيقة', rating: editingCourse.rating || 5,
     };
     try {
         if (editingCourse.id) await supabase.from('courses').update(courseData).eq('id', editingCourse.id);
         else await supabase.from('courses').insert(courseData);
-        showToast('تم حفظ الكورس بنجاح', 'success'); setCourseModalOpen(false); fetchCourses(); refreshCourses();
-    } catch (error: any) { showToast(`حدث خطأ: ${error.message}`, 'error'); }
+        showToast('Course saved', 'success'); setCourseModalOpen(false); fetchCourses(); refreshCourses();
+    } catch (error: any) { showToast(`Error: ${error.message}`, 'error'); }
   };
 
   const handleDeleteCourse = async (id: string) => {
-    if (!confirm('هل أنت متأكد؟ سيتم حذف الكورس وجميع دروسه!')) return;
+    if (!confirm('Delete course and all lessons?')) return;
     await supabase.from('courses').delete().eq('id', id);
-    showToast('تم حذف الكورس', 'success'); fetchCourses(); refreshCourses();
+    showToast('Course deleted', 'success'); fetchCourses(); refreshCourses();
   };
 
   const openCourseModal = (course?: Course) => {
-    setEditingCourse(course || { is_paid: true, rating: 5, level: 'متوسط', duration: '15 ساعة' });
+    setEditingCourse(course || { is_paid: true, rating: 5, level: 'متوسط', duration: '0 دقيقة' });
     setCourseModalOpen(true);
   };
 
-  // --- Lesson Actions Updated ---
+  // --- Lesson Actions ---
   const openLessonsModal = async (courseId: string) => {
     setSelectedCourseId(courseId);
     await fetchLessons(courseId);
@@ -126,8 +130,7 @@ export const AdminDashboard: React.FC = () => {
 
   const resetLessonForm = () => {
     setEditingLessonId(null);
-    setNewLesson({ title: '', description: '', video_url: '', duration: '10:00', order: (currentCourseLessons.length || 0) + 1, is_published: true });
-    setSubtitleUrl('');
+    setNewLesson({ title: '', description: '', video_url: '', thumbnail_url: '', duration: '10:00', order: (currentCourseLessons.length || 0) + 1, is_published: true });
   };
 
   const handleEditLesson = (lesson: Lesson) => {
@@ -137,96 +140,129 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveLesson = async () => {
     if (!selectedCourseId || !newLesson.title || !newLesson.video_url) {
-        showToast('يرجى إدخال العنوان ورابط الفيديو', 'error');
+        showToast('Title and Video URL required', 'error');
         return;
     }
+    
+    const processed = processVideoUrl(newLesson.video_url);
     
     const lessonData = {
       course_id: selectedCourseId,
       title: newLesson.title,
       description: newLesson.description,
-      video_url: newLesson.video_url,
+      video_url: processed.url, 
+      thumbnail_url: newLesson.thumbnail_url,
       duration: newLesson.duration,
       order: newLesson.order,
       is_published: newLesson.is_published
     };
 
-    let lessonId = editingLessonId;
-
     if (editingLessonId) {
         const { error } = await supabase.from('lessons').update(lessonData).eq('id', editingLessonId);
         if (error) { showToast(error.message, 'error'); return; }
     } else {
-        const { data, error } = await supabase.from('lessons').insert(lessonData).select().single();
+        const { error } = await supabase.from('lessons').insert(lessonData);
         if (error) { showToast(error.message, 'error'); return; }
-        lessonId = data.id;
     }
 
-    // Handle Subtitle Add (Simple implementation: Adds one if provided)
-    if (subtitleUrl && lessonId) {
-        await supabase.from('lesson_subtitles').insert({
-            lesson_id: lessonId,
-            lang: subtitleLang,
-            label: subtitleLang === 'en' ? 'English' : 'Arabic',
-            vtt_url: subtitleUrl
-        });
+    showToast('Lesson saved', 'success');
+    
+    const { data: freshLessons } = await supabase.from('lessons').select('*').eq('course_id', selectedCourseId).order('order', { ascending: true });
+    
+    if (freshLessons) {
+        setCurrentCourseLessons(freshLessons as Lesson[]);
+        const totalDuration = calculateTotalDuration(freshLessons as any);
+        await supabase.from('courses').update({ duration: totalDuration }).eq('id', selectedCourseId);
+        fetchCourses();
     }
 
-    showToast('تم حفظ الدرس بنجاح', 'success');
-    fetchLessons(selectedCourseId);
     resetLessonForm();
   };
 
   const handleDeleteLesson = async (lessonId: string) => {
-    if (!confirm('حذف الدرس؟')) return;
+    if (!confirm('Delete lesson?')) return;
     await supabase.from('lessons').delete().eq('id', lessonId);
-    fetchLessons(selectedCourseId!);
-    showToast('تم الحذف', 'success');
+    
+    const { data: freshLessons } = await supabase.from('lessons').select('*').eq('course_id', selectedCourseId!).order('order', { ascending: true });
+    if (freshLessons) {
+        setCurrentCourseLessons(freshLessons as Lesson[]);
+        const totalDuration = calculateTotalDuration(freshLessons as any);
+        await supabase.from('courses').update({ duration: totalDuration }).eq('id', selectedCourseId!);
+        fetchCourses();
+    }
+    
+    showToast('Lesson deleted', 'success');
   };
   
   const handleSaveSettings = async () => {
       await updateSettings(localSettings);
-      showToast('تم حفظ الإعدادات', 'success');
+      showToast('Settings saved successfully', 'success');
   };
 
-  // ... (Render logic mostly same, updated Lesson Modal below) ...
+  // Helper to update config based on language
+  const updateConfig = (section: 'features_config' | 'content_config', baseKey: string, value: any) => {
+    const key = editingLang === 'en' ? `${baseKey}_en` : baseKey;
+    setLocalSettings(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [key]: value
+      }
+    }));
+  };
 
-  if (user?.role !== 'admin') return <div className="min-h-screen flex items-center justify-center text-white">غير مصرح لك بالدخول</div>;
+  // Helper to get current value based on language
+  const getConfigValue = (section: 'features_config' | 'content_config', baseKey: string) => {
+    const key = editingLang === 'en' ? `${baseKey}_en` : baseKey;
+    return localSettings[section]?.[key] || '';
+  };
+
+  const updateRootSetting = (baseKey: 'hero_title' | 'hero_desc' | 'hero_title_line1' | 'hero_title_line2', value: string) => {
+      const key = editingLang === 'en' ? `${baseKey}_en` : baseKey;
+      setLocalSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const getRootSetting = (baseKey: 'hero_title' | 'hero_desc' | 'hero_title_line1' | 'hero_title_line2') => {
+      const key = editingLang === 'en' ? `${baseKey}_en` : baseKey;
+      return (localSettings as any)[key] || '';
+  };
+
+  if (user?.role !== 'admin') return <div className="min-h-screen flex items-center justify-center text-white">Access Denied</div>;
 
   return (
-    <div className="min-h-screen page-padding-top pb-10 bg-navy-950">
+    <div className="min-h-screen page-padding-top pb-10 bg-navy-950" dir="rtl">
       <div className="container-custom">
-        {/* ... Header & Sidebar (Same as before) ... */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-1">لوحة التحكم الشاملة</h1>
-            <p className="text-gray-400 text-sm">مركز القيادة والتحكم في المنصة</p>
+            <h1 className="text-3xl font-bold text-white mb-1">{t('admin_panel')}</h1>
+            <p className="text-gray-400 text-sm">{t('admin_desc')}</p>
           </div>
           <div className="flex gap-3">
-             <div className={`border px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold transition-colors ${siteSettings.maintenance_mode ? 'bg-red-500/10 border-red-500/20 text-red-400' : 'bg-green-500/10 border-green-500/20 text-green-400'}`}>
-                <div className={`w-2 h-2 rounded-full animate-pulse ${siteSettings.maintenance_mode ? 'bg-red-500' : 'bg-green-500'}`}></div> 
-                {siteSettings.maintenance_mode ? 'وضع الصيانة مفعل' : 'النظام يعمل'}
-             </div>
+             {/* Removed Maintenance Status Indicator */}
           </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Sidebar Navigation */}
+          {/* Sidebar */}
           <div className="lg:col-span-3 space-y-4">
             <div className="glass-card p-4 sticky top-44">
               <nav className="space-y-2">
-                <button onClick={() => setActiveTab('requests')} className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${activeTab === 'requests' ? 'bg-gold-500 text-navy-950 font-bold' : 'hover:bg-white/5 text-gray-300'}`}>
-                  <div className="flex items-center gap-3"><Users size={18} /> طلبات الانضمام</div>
-                </button>
-                <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'users' ? 'bg-gold-500 text-navy-950 font-bold' : 'hover:bg-white/5 text-gray-300'}`}>
-                  <Users size={18} /> إدارة الأعضاء
-                </button>
-                <button onClick={() => setActiveTab('courses')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'courses' ? 'bg-gold-500 text-navy-950 font-bold' : 'hover:bg-white/5 text-gray-300'}`}>
-                  <BookOpen size={18} /> إدارة الكورسات
-                </button>
-                <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === 'settings' ? 'bg-gold-500 text-navy-950 font-bold' : 'hover:bg-white/5 text-gray-300'}`}>
-                  <Settings size={18} /> إعدادات الموقع
-                </button>
+                {[
+                  { id: 'requests', label: t('requests'), icon: UserPlus },
+                  { id: 'users', label: t('users'), icon: Users },
+                  { id: 'courses', label: t('courses'), icon: BookOpen },
+                  { id: 'content', label: t('content'), icon: FileText },
+                  { id: 'settings', label: t('settings'), icon: Settings },
+                ].map(item => (
+                  <button 
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id as any)} 
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-gold-500 text-navy-950 font-bold' : 'hover:bg-white/5 text-gray-300'}`}
+                  >
+                    <item.icon size={18} /> {item.label}
+                  </button>
+                ))}
               </nav>
             </div>
           </div>
@@ -234,15 +270,67 @@ export const AdminDashboard: React.FC = () => {
           {/* Main Content */}
           <div className="lg:col-span-9">
             <div className="glass-card p-6 min-h-[600px]">
-               {/* ... (Requests, Users, Settings tabs same as before) ... */}
                
+               {/* REQUESTS TAB */}
+               {activeTab === 'requests' && (
+                 <div className="animate-fade-in">
+                    <h2 className="text-xl font-bold mb-6">{t('requests')}</h2>
+                    <div className="space-y-4">
+                      {usersList.filter(u => u.status === 'pending').length === 0 && <p className="text-gray-500 text-center py-10">No new requests</p>}
+                      {usersList.filter(u => u.status === 'pending').map(u => (
+                        <div key={u.id} className="bg-navy-900/50 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                          <div>
+                            <p className="font-bold text-white">{u.full_name || u.email}</p>
+                            <p className="text-xs text-gray-400">{u.email} | {u.phone_number}</p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleApproveUser(u.id)} className="bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-green-600">Approve</button>
+                            <button onClick={() => handleDeleteUser(u.id)} className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-500/20">Reject</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                 </div>
+               )}
+
+               {/* USERS TAB */}
+               {activeTab === 'users' && (
+                 <div className="animate-fade-in">
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-xl font-bold">{t('users')}</h2>
+                      <button onClick={() => setEnrollModalOpen(true)} className="bg-gold-500 text-navy-950 px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-2">
+                        <Plus size={16} /> Enroll
+                      </button>
+                    </div>
+                    <div className="space-y-3">
+                      {usersList.map(u => (
+                        <div key={u.id} className="bg-navy-900/50 p-4 rounded-xl border border-white/5 flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                             <div className={`w-2 h-2 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+                             <div>
+                                <p className="font-bold text-white text-sm">{u.full_name || 'No Name'}</p>
+                                <p className="text-xs text-gray-400">{u.email}</p>
+                             </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <span className="text-xs bg-white/5 px-2 py-1 rounded text-gray-400">{u.role}</span>
+                             <button onClick={() => handleDeleteUser(u.id)} className="text-red-400 hover:bg-red-500/10 p-2 rounded-lg transition-colors">
+                                <Trash2 size={16} />
+                             </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                 </div>
+               )}
+
                {/* COURSES TAB */}
                {activeTab === 'courses' && (
                  <div className="animate-fade-in">
                     <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
-                      <h2 className="text-xl font-bold text-white">إدارة الكورسات</h2>
+                      <h2 className="text-xl font-bold text-white">{t('courses')}</h2>
                       <button onClick={() => openCourseModal()} className="bg-gold-500 text-navy-950 px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 hover:bg-gold-400 transition-colors">
-                        <Plus size={18} /> إضافة كورس
+                        <Plus size={18} /> {t('add_course')}
                       </button>
                     </div>
                     <div className="space-y-4">
@@ -254,16 +342,221 @@ export const AdminDashboard: React.FC = () => {
                              </div>
                              <div>
                                <h3 className="font-bold text-white">{course.title}</h3>
-                               <span className="text-xs text-gray-500">{course.lesson_count} دروس</span>
+                               <span className="text-xs text-gray-500">{course.lesson_count || 0} {t('lessons_count')} | {course.duration || '0'}</span>
                              </div>
                           </div>
                           <div className="flex gap-2">
-                             <button onClick={() => openLessonsModal(course.id)} className="bg-navy-800 text-white px-3 py-2 rounded-lg text-xs font-bold border border-white/10">الدروس</button>
-                             <button onClick={() => openCourseModal(course)} className="bg-navy-800 text-white px-3 py-2 rounded-lg text-xs font-bold border border-white/10">تعديل</button>
-                             <button onClick={() => handleDeleteCourse(course.id)} className="bg-red-500/10 text-red-400 px-3 py-2 rounded-lg text-xs font-bold border border-red-500/20">حذف</button>
+                             <button onClick={() => openLessonsModal(course.id)} className="bg-navy-800 text-white px-3 py-2 rounded-lg text-xs font-bold border border-white/10 hover:bg-white/5">{t('lessons')}</button>
+                             <button onClick={() => openCourseModal(course)} className="bg-navy-800 text-white px-3 py-2 rounded-lg text-xs font-bold border border-white/10 hover:bg-white/5">{t('edit')}</button>
+                             <button onClick={() => handleDeleteCourse(course.id)} className="bg-red-500/10 text-red-400 px-3 py-2 rounded-lg text-xs font-bold border border-red-500/20 hover:bg-red-500/20">{t('delete')}</button>
                           </div>
                         </div>
                       ))}
+                    </div>
+                 </div>
+               )}
+
+               {/* CONTENT CONFIG TAB */}
+               {activeTab === 'content' && (
+                 <div className="animate-fade-in">
+                    {/* Language Switcher for Editing */}
+                    <div className="flex items-center justify-between mb-6 bg-navy-900 p-3 rounded-xl border border-white/10">
+                        <span className="text-sm font-bold text-gray-300 flex items-center gap-2">
+                            <Globe size={16} /> {t('lang_edit')}:
+                        </span>
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => setEditingLang('ar')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${editingLang === 'ar' ? 'bg-gold-500 text-navy-950' : 'bg-white/5 text-gray-400'}`}
+                            >
+                                {t('arabic')}
+                            </button>
+                            <button 
+                                onClick={() => setEditingLang('en')}
+                                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-colors ${editingLang === 'en' ? 'bg-gold-500 text-navy-950' : 'bg-white/5 text-gray-400'}`}
+                            >
+                                {t('english')}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                        <button onClick={() => setContentSubTab('home')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${contentSubTab === 'home' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}>{t('home')}</button>
+                        <button onClick={() => setContentSubTab('about')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${contentSubTab === 'about' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}>{t('about')}</button>
+                        <button onClick={() => setContentSubTab('contact')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${contentSubTab === 'contact' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}>{t('contact')}</button>
+                        <button onClick={() => setContentSubTab('courses')} className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap ${contentSubTab === 'courses' ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}>{t('courses')}</button>
+                    </div>
+
+                    <div className="space-y-6">
+                        {contentSubTab === 'home' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <h3 className="font-bold text-gold-500 mb-2">Hero Section Texts</h3>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Title Line 1</label>
+                                    <input type="text" value={getRootSetting('hero_title_line1')} onChange={e => updateRootSetting('hero_title_line1', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                </div>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Title Line 2 (Gold)</label>
+                                    <input type="text" value={getRootSetting('hero_title_line2')} onChange={e => updateRootSetting('hero_title_line2', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                </div>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Description</label>
+                                    <textarea value={getRootSetting('hero_desc')} onChange={e => updateRootSetting('hero_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white h-20" />
+                                </div>
+
+                                <h3 className="font-bold text-gold-500 mt-6 mb-2">Footer Texts</h3>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Tagline</label>
+                                    <input type="text" value={getConfigValue('content_config', 'footer_tagline')} onChange={e => updateConfig('content_config', 'footer_tagline', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                </div>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Sub Tagline</label>
+                                    <input type="text" dir="ltr" value={getConfigValue('content_config', 'footer_sub_tagline')} onChange={e => updateConfig('content_config', 'footer_sub_tagline', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white text-left" />
+                                </div>
+
+                                <h3 className="font-bold text-gold-500 mt-6 mb-2">Feature Toggles (Global)</h3>
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="bg-navy-900 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-bold text-white">Coming Soon Card</h4>
+                                            <p className="text-xs text-gray-400">Show/Hide</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => setLocalSettings(prev => ({...prev, features_config: {...prev.features_config, show_coming_soon: !prev.features_config?.show_coming_soon}}))}
+                                            className={`w-12 h-6 rounded-full transition-colors relative ${localSettings.features_config?.show_coming_soon ? 'bg-gold-500' : 'bg-gray-700'}`}
+                                        >
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${localSettings.features_config?.show_coming_soon ? 'left-1' : 'right-1'}`}></div>
+                                        </button>
+                                    </div>
+                                    <div className="bg-navy-900 p-4 rounded-xl border border-white/5 flex items-center justify-between">
+                                        <div>
+                                            <h4 className="font-bold text-white">Stats Counter</h4>
+                                            <p className="text-xs text-gray-400">Show/Hide</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => setLocalSettings(prev => ({...prev, features_config: {...prev.features_config, show_stats: !prev.features_config?.show_stats}}))}
+                                            className={`w-12 h-6 rounded-full transition-colors relative ${localSettings.features_config?.show_stats ? 'bg-gold-500' : 'bg-gray-700'}`}
+                                        >
+                                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform ${localSettings.features_config?.show_stats ? 'left-1' : 'right-1'}`}></div>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {contentSubTab === 'about' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Main Title</label>
+                                    <input type="text" value={getConfigValue('content_config', 'about_main_title')} onChange={e => updateConfig('content_config', 'about_main_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                </div>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Main Description</label>
+                                    <textarea value={getConfigValue('content_config', 'about_main_desc')} onChange={e => updateConfig('content_config', 'about_main_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white h-20" />
+                                </div>
+                                
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                        <label className="block text-xs font-bold text-gray-400 mb-2">Mission Title</label>
+                                        <input type="text" value={getConfigValue('content_config', 'mission_title')} onChange={e => updateConfig('content_config', 'mission_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                        <label className="block text-xs font-bold text-gray-400 mt-3 mb-2">Mission Desc</label>
+                                        <textarea value={getConfigValue('content_config', 'mission_desc')} onChange={e => updateConfig('content_config', 'mission_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white h-24" />
+                                    </div>
+                                    <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                        <label className="block text-xs font-bold text-gray-400 mb-2">Vision Title</label>
+                                        <input type="text" value={getConfigValue('content_config', 'vision_title')} onChange={e => updateConfig('content_config', 'vision_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                        <label className="block text-xs font-bold text-gray-400 mt-3 mb-2">Vision Desc</label>
+                                        <textarea value={getConfigValue('content_config', 'vision_desc')} onChange={e => updateConfig('content_config', 'vision_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white h-24" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {contentSubTab === 'contact' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Main Title</label>
+                                    <input type="text" value={getConfigValue('content_config', 'contact_main_title')} onChange={e => updateConfig('content_config', 'contact_main_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                </div>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Main Description</label>
+                                    <textarea value={getConfigValue('content_config', 'contact_main_desc')} onChange={e => updateConfig('content_config', 'contact_main_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white h-16" />
+                                </div>
+
+                                <h4 className="font-bold text-gold-500 mt-4">Social Cards</h4>
+                                
+                                {['facebook', 'instagram', 'telegram', 'youtube', 'tiktok', 'whatsapp'].map(platform => {
+                                    const code = platform === 'facebook' ? 'fb' : platform === 'instagram' ? 'insta' : platform === 'telegram' ? 'tg' : platform === 'youtube' ? 'yt' : platform === 'tiktok' ? 'tt' : 'wa';
+                                    const visibleKey = `social_${platform}_visible`;
+                                    
+                                    return (
+                                        <div key={platform} className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h5 className="font-bold text-white capitalize">{platform} Card</h5>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-gray-400">{localSettings.features_config?.[visibleKey] !== false ? 'Visible' : 'Hidden'}</span>
+                                                    <button 
+                                                        onClick={() => setLocalSettings(prev => ({...prev, features_config: {...prev.features_config, [visibleKey]: prev.features_config?.[visibleKey] === false}}))}
+                                                        className={`w-10 h-5 rounded-full transition-colors relative ${localSettings.features_config?.[visibleKey] !== false ? 'bg-green-500' : 'bg-gray-600'}`}
+                                                    >
+                                                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-transform ${localSettings.features_config?.[visibleKey] !== false ? 'left-1' : 'right-1'}`}></div>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="mb-3">
+                                                <input type="text" dir="ltr" placeholder="Link URL" value={(localSettings.social_links as any)[platform] || ''} onChange={e => setLocalSettings({...localSettings, social_links: {...localSettings.social_links, [platform]: e.target.value}})} className="w-full bg-navy-950 border border-white/10 rounded px-2 py-2 text-xs" />
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <input type="text" placeholder="Title" value={getConfigValue('content_config', `${code}_card_title`)} onChange={e => updateConfig('content_config', `${code}_card_title`, e.target.value)} className="bg-navy-950 border border-white/10 rounded-lg p-2 text-white text-xs" />
+                                                <input type="text" placeholder="Subtitle" value={getConfigValue('content_config', `${code}_card_sub`)} onChange={e => updateConfig('content_config', `${code}_card_sub`, e.target.value)} className="bg-navy-950 border border-white/10 rounded-lg p-2 text-white text-xs" />
+                                                <input type="text" placeholder="Button Text" value={getConfigValue('content_config', `${code}_card_btn`)} onChange={e => updateConfig('content_config', `${code}_card_btn`, e.target.value)} className="bg-navy-950 border border-white/10 rounded-lg p-2 text-white text-xs" />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {contentSubTab === 'courses' && (
+                            <div className="space-y-4 animate-fade-in">
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Main Title</label>
+                                    <input type="text" value={getConfigValue('content_config', 'courses_main_title')} onChange={e => updateConfig('content_config', 'courses_main_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                </div>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                    <label className="block text-xs font-bold text-gray-400 mb-2">Main Description</label>
+                                    <textarea value={getConfigValue('content_config', 'courses_main_desc')} onChange={e => updateConfig('content_config', 'courses_main_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white h-16" />
+                                </div>
+
+                                <h4 className="font-bold text-gold-500 mt-4">Coming Soon Card</h4>
+                                <div className="bg-navy-900 p-4 rounded-xl border border-white/5 space-y-3">
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">Title</label>
+                                        <input type="text" value={getConfigValue('content_config', 'coming_soon_title')} onChange={e => updateConfig('content_config', 'coming_soon_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">Description</label>
+                                        <input type="text" value={getConfigValue('content_config', 'coming_soon_desc')} onChange={e => updateConfig('content_config', 'coming_soon_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1">Badge Text</label>
+                                        <input type="text" value={getConfigValue('content_config', 'coming_soon_badge')} onChange={e => updateConfig('content_config', 'coming_soon_badge', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1">Feature 1</label>
+                                            <input type="text" value={getConfigValue('content_config', 'coming_soon_feature_1')} onChange={e => updateConfig('content_config', 'coming_soon_feature_1', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1">Feature 2</label>
+                                            <input type="text" value={getConfigValue('content_config', 'coming_soon_feature_2')} onChange={e => updateConfig('content_config', 'coming_soon_feature_2', e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-white" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <button onClick={handleSaveSettings} className="mt-6 bg-gold-500 text-navy-950 px-8 py-3 rounded-xl font-bold w-full hover:bg-gold-400 shadow-lg">{t('save_changes')}</button>
                     </div>
                  </div>
                )}
@@ -271,13 +564,20 @@ export const AdminDashboard: React.FC = () => {
                {/* SETTINGS TAB */}
                {activeTab === 'settings' && (
                  <div className="animate-fade-in">
-                    <h2 className="text-xl font-bold mb-6">إعدادات الموقع</h2>
+                    <h2 className="text-xl font-bold mb-6">{t('settings')}</h2>
                     <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-bold text-gray-300 mb-2">اسم الموقع</label>
+                            <label className="block text-sm font-bold text-gray-300 mb-2">Site Name</label>
                             <input type="text" value={localSettings.site_name} onChange={e => setLocalSettings({...localSettings, site_name: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white" />
                         </div>
-                        <button onClick={handleSaveSettings} className="bg-gold-500 text-navy-950 px-8 py-3 rounded-xl font-bold">حفظ التغييرات</button>
+                        <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-300 mb-2">Logo URL</label>
+                                <input type="text" dir="ltr" value={localSettings.logo_url} onChange={e => setLocalSettings({...localSettings, logo_url: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white text-left" />
+                            </div>
+                        </div>
+                        
+                        <button onClick={handleSaveSettings} className="bg-gold-500 text-navy-950 px-8 py-3 rounded-xl font-bold mt-6 hover:bg-gold-400 w-full">{t('save_changes')}</button>
                     </div>
                  </div>
                )}
@@ -291,7 +591,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="glass-card p-6 max-w-5xl w-full border-gold-500/30 shadow-2xl h-[90vh] flex flex-col">
               <div className="flex justify-between items-center mb-6 shrink-0">
                  <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-                    <Video className="text-gold-500" /> إدارة الدروس
+                    <Video className="text-gold-500" /> {t('lessons')}
                  </h3>
                  <button onClick={() => setLessonsModalOpen(false)} className="text-gray-400 hover:text-white"><X /></button>
               </div>
@@ -300,76 +600,69 @@ export const AdminDashboard: React.FC = () => {
                  {/* Form */}
                  <div className="lg:w-1/3 bg-navy-900/50 p-5 rounded-xl border border-white/5 shrink-0 overflow-y-auto custom-scrollbar">
                     <h4 className="font-bold text-white mb-4 text-sm uppercase tracking-wider flex items-center justify-between">
-                        {editingLessonId ? 'تعديل الدرس' : 'إضافة درس جديد'}
-                        {editingLessonId && <button onClick={resetLessonForm} className="text-[10px] text-gold-500">إلغاء</button>}
+                        {editingLessonId ? 'Edit Lesson' : 'New Lesson'}
+                        {editingLessonId && <button onClick={resetLessonForm} className="text-[10px] text-gold-500">Cancel</button>}
                     </h4>
                     <div className="space-y-3">
                         <div>
-                            <label className="text-xs text-gray-400">العنوان</label>
+                            <label className="text-xs text-gray-400">Title</label>
                             <input type="text" value={newLesson.title} onChange={e => setNewLesson({...newLesson, title: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-gold-500 outline-none" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-400">الوصف</label>
+                            <label className="text-xs text-gray-400">Description</label>
                             <textarea value={newLesson.description || ''} onChange={e => setNewLesson({...newLesson, description: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-gold-500 outline-none h-20" />
                         </div>
                         <div>
-                            <label className="text-xs text-gray-400">رابط الفيديو (YouTube, Vimeo, MP4, HLS)</label>
-                            <input type="text" dir="ltr" value={newLesson.video_url} onChange={e => setNewLesson({...newLesson, video_url: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-gold-500 outline-none text-left" />
+                            <label className="text-xs text-gray-400 flex items-center gap-1"><Code size={12} /> Video URL / Embed Code</label>
+                            <textarea dir="ltr" value={newLesson.video_url} onChange={e => setNewLesson({...newLesson, video_url: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-gold-500 outline-none text-left h-24" placeholder="Direct Link or <iframe...>" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-400 flex items-center gap-1"><ImageIcon size={12} /> Thumbnail URL</label>
+                            <input type="text" dir="ltr" value={newLesson.thumbnail_url || ''} onChange={e => setNewLesson({...newLesson, thumbnail_url: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-gold-500 outline-none text-left" placeholder="https://..." />
                         </div>
                         
-                        {/* Subtitles Section */}
-                        <div className="bg-navy-950 p-3 rounded-lg border border-white/5">
-                            <label className="text-xs text-gray-400 flex items-center gap-1 mb-2"><Globe size={12} /> ملف الترجمة (VTT)</label>
-                            <div className="flex gap-2">
-                                <select value={subtitleLang} onChange={e => setSubtitleLang(e.target.value)} className="bg-navy-900 text-white text-xs rounded p-1 border border-white/10">
-                                    <option value="en">En</option>
-                                    <option value="ar">Ar</option>
-                                </select>
-                                <input type="text" dir="ltr" placeholder="https://.../sub.vtt" value={subtitleUrl} onChange={e => setSubtitleUrl(e.target.value)} className="flex-1 bg-navy-900 border border-white/10 rounded p-1 text-xs text-white text-left" />
-                            </div>
-                        </div>
-
                         <div className="flex gap-2">
                             <div className="flex-1">
-                                <label className="text-xs text-gray-400">المدة</label>
-                                <input type="text" value={newLesson.duration} onChange={e => setNewLesson({...newLesson, duration: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white" />
+                                <label className="text-xs text-gray-400">Duration (MM:SS)</label>
+                                <input type="text" dir="ltr" value={newLesson.duration} onChange={e => setNewLesson({...newLesson, duration: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white text-center" placeholder="10:00" />
                             </div>
                             <div className="flex-1">
-                                <label className="text-xs text-gray-400">الترتيب</label>
-                                <input type="number" value={newLesson.order} onChange={e => setNewLesson({...newLesson, order: parseInt(e.target.value)})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white" />
+                                <label className="text-xs text-gray-400">Order</label>
+                                <input type="number" value={newLesson.order} onChange={e => setNewLesson({...newLesson, order: parseInt(e.target.value)})} className="w-full bg-navy-950 border border-white/10 rounded-lg p-2 text-sm text-white text-center" />
                             </div>
                         </div>
                         
                         <div className="flex items-center gap-2 mt-2">
                             <input type="checkbox" checked={newLesson.is_published} onChange={e => setNewLesson({...newLesson, is_published: e.target.checked})} className="accent-gold-500" />
-                            <label className="text-xs text-white">نشر الدرس</label>
+                            <label className="text-xs text-white">Publish</label>
                         </div>
 
                         <button onClick={handleSaveLesson} className="w-full bg-gold-500 text-navy-950 py-2 rounded-lg font-bold text-sm mt-2 hover:bg-gold-400">
-                            {editingLessonId ? 'حفظ التعديلات' : 'إضافة الدرس'}
+                            {editingLessonId ? 'Save Changes' : 'Add Lesson'}
                         </button>
                     </div>
                  </div>
 
                  {/* List */}
                  <div className="lg:w-2/3 bg-navy-950 rounded-xl border border-white/5 overflow-hidden flex flex-col">
-                    <div className="p-4 bg-navy-900 border-b border-white/5">
-                        <h4 className="font-bold text-white text-sm">قائمة الدروس ({currentCourseLessons.length})</h4>
+                    <div className="p-4 bg-navy-900 border-b border-white/5 flex justify-between items-center">
+                        <h4 className="font-bold text-white text-sm">Lesson List ({currentCourseLessons.length})</h4>
+                        <span className="text-xs text-gold-500">Total: {calculateTotalDuration(currentCourseLessons as any)}</span>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
                         {currentCourseLessons.map((lesson) => (
                             <div key={lesson.id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors group ${editingLessonId === lesson.id ? 'bg-gold-500/10 border-gold-500/30' : 'bg-navy-900/50 border-white/5 hover:border-gold-500/20'}`}>
                                 <div className="text-gray-500 font-mono text-xs w-6 text-center">{lesson.order}</div>
-                                <div className="w-10 h-10 bg-black rounded flex items-center justify-center shrink-0">
-                                    <PlayCircle size={20} className="text-gray-600 group-hover:text-gold-500 transition-colors" />
+                                <div className="w-10 h-10 bg-black rounded flex items-center justify-center shrink-0 overflow-hidden">
+                                    {lesson.thumbnail_url ? <img src={lesson.thumbnail_url} className="w-full h-full object-cover" /> : <PlayCircle size={20} className="text-gray-600 group-hover:text-gold-500 transition-colors" />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h5 className="text-white font-bold text-sm truncate">{lesson.title}</h5>
                                     <div className="flex items-center gap-2">
-                                        <span className={`text-[10px] px-1.5 rounded ${lesson.is_published ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
-                                            {lesson.is_published ? 'منشور' : 'مسودة'}
+                                        <span className={`text-sm px-1.5 rounded ${lesson.is_published ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                            {lesson.is_published ? t('published') : t('draft')}
                                         </span>
-                                        <span className="text-gray-500 text-[10px] truncate dir-ltr">{lesson.video_url}</span>
+                                        <span className="text-gray-500 text-[10px] truncate dir-ltr">{lesson.duration}</span>
                                     </div>
                                 </div>
                                 <div className="flex gap-1">
@@ -385,33 +678,55 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
         
-        {/* Other modals (Enroll, Course) would be here... */}
+        {/* Enroll Modal */}
         {enrollModalOpen && (
            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
              <div className="glass-card p-8 max-w-md w-full">
-                <h3 className="text-xl font-bold text-white mb-4">إضافة طالب</h3>
-                <input type="email" placeholder="student@example.com" value={enrollEmail} onChange={e => setEnrollEmail(e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white mb-4" />
-                <div className="flex gap-3">
-                    <button onClick={handleAddEnrollment} className="flex-1 bg-gold-500 text-navy-950 py-2 rounded-lg font-bold">إضافة</button>
-                    <button onClick={() => setEnrollModalOpen(false)} className="flex-1 bg-white/5 text-white py-2 rounded-lg">إلغاء</button>
+                <h3 className="text-xl font-bold text-white mb-4">Enroll Student</h3>
+                <div className="space-y-4">
+                    <select 
+                        value={selectedCourseId || ''} 
+                        onChange={e => setSelectedCourseId(e.target.value)}
+                        className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white"
+                    >
+                        <option value="">Select Course</option>
+                        {coursesList.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                    </select>
+                    <input type="email" placeholder="student@example.com" value={enrollEmail} onChange={e => setEnrollEmail(e.target.value)} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white" />
+                    <div className="flex gap-3">
+                        <button onClick={handleAddEnrollment} className="flex-1 bg-gold-500 text-navy-950 py-2 rounded-lg font-bold">Enroll</button>
+                        <button onClick={() => setEnrollModalOpen(false)} className="flex-1 bg-white/5 text-white py-2 rounded-lg">Cancel</button>
+                    </div>
                 </div>
              </div>
            </div>
         )}
         
+        {/* Course Modal */}
         {courseModalOpen && (
            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[200] p-4">
              <div className="glass-card p-8 max-w-lg w-full">
-                <h3 className="text-xl font-bold text-white mb-4">{editingCourse.id ? 'تعديل كورس' : 'كورس جديد'}</h3>
+                <h3 className="text-xl font-bold text-white mb-4">{editingCourse.id ? 'Edit Course' : 'New Course'}</h3>
                 <div className="space-y-3">
-                    <input type="text" placeholder="العنوان" value={editingCourse.title || ''} onChange={e => setEditingCourse({...editingCourse, title: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white" />
-                    <textarea placeholder="الوصف" value={editingCourse.description || ''} onChange={e => setEditingCourse({...editingCourse, description: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white h-24" />
+                    <input type="text" placeholder="Title" value={editingCourse.title || ''} onChange={e => setEditingCourse({...editingCourse, title: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white" />
+                    <textarea placeholder="Description" value={editingCourse.description || ''} onChange={e => setEditingCourse({...editingCourse, description: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white h-24" />
+                    <input type="text" dir="ltr" placeholder="Thumbnail URL" value={editingCourse.thumbnail || ''} onChange={e => setEditingCourse({...editingCourse, thumbnail: e.target.value})} className="w-full bg-navy-950 border border-white/10 rounded-xl p-3 text-white text-left" />
+                    
+                    <div className="flex gap-2">
+                        <select value={editingCourse.level || 'متوسط'} onChange={e => setEditingCourse({...editingCourse, level: e.target.value as any})} className="bg-navy-950 border border-white/10 rounded-xl p-3 text-white flex-1">
+                            <option value="مبتدئ">Beginner</option>
+                            <option value="متوسط">Intermediate</option>
+                            <option value="خبير">Expert</option>
+                        </select>
+                        <input type="number" placeholder="Rating (1-5)" value={editingCourse.rating || 5} onChange={e => setEditingCourse({...editingCourse, rating: parseFloat(e.target.value)})} className="bg-navy-950 border border-white/10 rounded-xl p-3 text-white w-24 text-center" />
+                    </div>
+
                     <div className="flex items-center gap-2">
                         <input type="checkbox" checked={editingCourse.is_paid || false} onChange={e => setEditingCourse({...editingCourse, is_paid: e.target.checked})} className="accent-gold-500" />
-                        <label className="text-white text-sm">مدفوع</label>
+                        <label className="text-white text-sm">Paid Course</label>
                     </div>
-                    <button onClick={handleSaveCourse} className="w-full bg-gold-500 text-navy-950 py-3 rounded-xl font-bold mt-2">حفظ</button>
-                    <button onClick={() => setCourseModalOpen(false)} className="w-full bg-white/5 text-white py-3 rounded-xl font-bold">إلغاء</button>
+                    <button onClick={handleSaveCourse} className="w-full bg-gold-500 text-navy-950 py-3 rounded-xl font-bold mt-2">Save</button>
+                    <button onClick={() => setCourseModalOpen(false)} className="w-full bg-white/5 text-white py-3 rounded-xl font-bold">Cancel</button>
                 </div>
              </div>
            </div>

@@ -9,17 +9,17 @@
   
   body {
     @apply bg-navy-950 text-white font-cairo antialiased;
-    /* خلفية أساسية عميقة جداً وثابتة */
-    background-color: #020617;
+    /* New Bluish-Navy Background */
+    background-color: #040711;
     background-image: 
-      radial-gradient(circle at 50% 0%, #1e293b 0%, #020617 60%),
-      radial-gradient(circle at 80% 80%, rgba(255, 215, 0, 0.03) 0%, transparent 50%);
+      radial-gradient(circle at 50% 0%, #0f1c35 0%, #040711 60%), /* Top center subtle blue glow */
+      radial-gradient(circle at 90% 90%, rgba(255, 196, 0, 0.03) 0%, transparent 30%); /* Subtle gold hint bottom right */
     background-attachment: fixed;
     min-height: 100vh;
     overflow-x: hidden;
   }
 
-  /* Noise Texture Overlay */
+  /* Noise Texture - Reduced opacity */
   body::before {
     content: "";
     position: fixed;
@@ -27,7 +27,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
     pointer-events: none;
     z-index: 50;
     opacity: 0.4;
@@ -45,54 +45,47 @@
 }
 
 @layer utilities {
-  /* كلاسات الزجاج المحسنة */
+  /* Glass Effects - Adjusted for Navy Blue tint */
   .glass {
-    @apply bg-navy-900/60 backdrop-blur-md border-b border-white/5;
+    @apply bg-[#0C1220]/80 backdrop-blur-md border-b border-white/5;
   }
   
-  /* كارت زجاجي احترافي */
+  /* Darker, Bluer Glass Card */
   .glass-card {
-    @apply bg-[#0f172a]/40 backdrop-blur-xl border border-white/5 rounded-2xl transition-all duration-500 shadow-lg;
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    @apply bg-[#0C1220]/60 backdrop-blur-xl border border-white/5 rounded-2xl transition-all duration-500 shadow-lg;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
   }
 
   .glass-card-hover {
-    @apply hover:border-gold-500/30 hover:bg-[#1e293b]/60 hover:shadow-[0_0_30px_rgba(255,215,0,0.05)] hover:-translate-y-1;
+    @apply hover:border-gold-500/20 hover:bg-[#162032]/80 hover:shadow-[0_0_30px_rgba(255,215,0,0.03)] hover:-translate-y-1;
   }
   
-  /* تدرج ذهبي للنصوص */
   .text-gold-gradient {
     @apply bg-clip-text text-transparent bg-gradient-to-r from-[#FFD700] via-[#FFEB3B] to-[#D4AF37];
     filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.3));
   }
 
-  /* الأزرار */
   .btn-gold {
     @apply bg-gradient-to-r from-[#FFC400] to-[#FFD700] text-navy-950 font-bold rounded-xl transition-all duration-300 hover:to-[#FFE066] hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(255,215,0,0.25)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-glass {
-    @apply bg-white/5 border border-white/10 text-white font-bold rounded-xl transition-all duration-300 hover:bg-white/10 hover:border-white/20 hover:-translate-y-0.5 active:scale-95 backdrop-blur-sm;
+    @apply bg-white/5 border border-white/5 text-white font-bold rounded-xl transition-all duration-300 hover:bg-white/10 hover:border-white/10 hover:-translate-y-0.5 active:scale-95 backdrop-blur-sm;
   }
 
   .page-padding-top {
     padding-top: 140px; 
   }
-  
-  /* تأثير التوهج */
-  .glow-point {
-    @apply absolute rounded-full blur-[100px] opacity-40 pointer-events-none;
-  }
 }
 
-/* Scrollbar Styling */
+/* Scrollbar Styling - Navy Themed */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  @apply bg-navy-950;
+  @apply bg-[#040711];
 }
 ::-webkit-scrollbar-thumb {
-  @apply bg-navy-800 rounded-full hover:bg-gold-600/50 transition-colors;
+  @apply bg-[#162032] rounded-full hover:bg-gold-600/50 transition-colors;
 }

@@ -1,19 +1,29 @@
 import React from 'react';
 import { useStore } from '../context/Store';
+import { useLanguage } from '../context/LanguageContext';
 import { Logo } from '../components/Logo';
 import { Target, Award, Users, Clock, Headphones } from 'lucide-react';
 
 export const About: React.FC = () => {
   const { siteSettings } = useStore();
+  const { t, language, dir } = useLanguage();
+  const content = siteSettings.content_config || {};
+
+  const getContent = (key: string) => {
+    if (language === 'en') {
+      return (content as any)[`${key}_en`] || (content as any)[key] || '';
+    }
+    return (content as any)[key] || '';
+  };
 
   const stats = [
-    { icon: Users, label: "طالب متداول", value: siteSettings.stats.students || "+1500" },
-    { icon: Clock, label: "ساعة تدريبية", value: siteSettings.stats.hours || "+50" },
-    { icon: Headphones, label: "دعم فني", value: "24/7" },
+    { icon: Users, label: getContent('stats_students_label') || "Active Students", value: siteSettings.stats.students || "+1500" },
+    { icon: Clock, label: getContent('stats_hours_label') || "Training Hours", value: siteSettings.stats.hours || "+50" },
+    { icon: Headphones, label: getContent('stats_support_label') || "Support", value: content.stats_support_value || "24/7" },
   ];
 
   return (
-    <div className="min-h-screen page-padding-top pb-20 relative overflow-hidden">
+    <div className="min-h-screen page-padding-top pb-20 relative overflow-hidden" dir={dir}>
       {/* Background Elements */}
       <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gold-500/5 blur-[150px] rounded-full -z-10"></div>
       <div className="absolute bottom-0 left-0 w-1/2 h-1/2 bg-blue-600/5 blur-[150px] rounded-full -z-10"></div>
@@ -25,10 +35,10 @@ export const About: React.FC = () => {
             <Logo />
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white mb-6">
-            {siteSettings.about_title || "عن المنصة"}
+            {getContent('about_main_title') || t('about')}
           </h1>
           <p className="text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto">
-            {siteSettings.about_desc || "ليست مجرد موقع تعليمي، بل هي أكاديمية متخصصة تهدف لتغيير مفهوم التداول في العالم العربي."}
+            {getContent('about_main_desc') || "Not just an educational site, but a specialized academy."}
           </p>
         </div>
 
@@ -40,9 +50,9 @@ export const About: React.FC = () => {
             <div className="flex justify-center mb-6">
                <Award className="text-gold-500 w-12 h-12" strokeWidth={1.5} />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-4">رسالتنا</h2>
+            <h2 className="text-3xl font-bold text-white mb-4">{getContent('mission_title') || "Our Mission"}</h2>
             <p className="text-gray-300 leading-relaxed text-lg">
-              توفير محتوى تعليمي عالي الجودة يجمع بين النظرية والتطبيق العملي، مع التركيز على إدارة المخاطر وبناء عقلية المتداول الناجح.
+              {getContent('mission_desc') || "Providing high-quality educational content..."}
             </p>
           </div>
 
@@ -52,9 +62,9 @@ export const About: React.FC = () => {
             <div className="flex justify-center mb-6">
                <Target className="text-gold-500 w-12 h-12" strokeWidth={1.5} />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-4">رؤيتنا</h2>
+            <h2 className="text-3xl font-bold text-white mb-4">{getContent('vision_title') || "Our Vision"}</h2>
             <p className="text-gray-300 leading-relaxed text-lg">
-              أن نكون المرجع الأول والأكثر موثوقية للمتداول العربي في أسواق المال العالمية، وبناء مجتمع من المحترفين القادرين على تحقيق الاستقلال المالي.
+              {getContent('vision_desc') || "To be the #1 trusted reference for traders..."}
             </p>
           </div>
         </div>
@@ -62,7 +72,7 @@ export const About: React.FC = () => {
         {/* Professional Statistics Section */}
         <div className="pt-16 border-t border-white/5">
           <div className="text-center mb-16">
-             <h2 className="text-3xl font-bold text-white">أرقام تتحدث عن نجاحنا</h2>
+             <h2 className="text-3xl font-bold text-white">{language === 'en' ? 'Numbers Speak for Success' : 'أرقام تتحدث عن نجاحنا'}</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {stats.map((stat, idx) => (

@@ -2,11 +2,12 @@ import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider, useStore } from './context/Store';
 import { ToastProvider } from './context/ToastContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { Wrench, Loader2 } from 'lucide-react';
 
-// Lazy Load Pages for Better Performance
+// Lazy Load Pages
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
 const Courses = lazy(() => import('./pages/Courses').then(module => ({ default: module.Courses })));
 const About = lazy(() => import('./pages/About').then(module => ({ default: module.About })));
@@ -16,7 +17,6 @@ const Register = lazy(() => import('./pages/Register').then(module => ({ default
 const CourseDetail = lazy(() => import('./pages/CourseDetail').then(module => ({ default: module.CourseDetail })));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 
-// Error Boundary Component
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
   constructor(props: {children: React.ReactNode}) {
     super(props);
@@ -24,7 +24,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
   static getDerivedStateFromError() { return { hasError: true }; }
   render() {
-    if (this.state.hasError) return <div className="p-10 text-center text-red-500">حدث خطأ غير متوقع. يرجى تحديث الصفحة.</div>;
+    if (this.state.hasError) return <div className="p-10 text-center text-red-500">Something went wrong. Please refresh.</div>;
     return this.props.children;
   }
 }
@@ -32,7 +32,7 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
 const LoadingScreen = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-gold-500">
     <Loader2 size={48} className="animate-spin mb-4" />
-    <p className="text-lg font-bold animate-pulse">جاري التحميل...</p>
+    <p className="text-lg font-bold animate-pulse">Loading...</p>
   </div>
 );
 
@@ -44,22 +44,25 @@ const ProtectedRoute = ({ children, adminOnly = false }: { children: React.React
   return children;
 };
 
-const MaintenanceScreen = () => (
-  <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-white text-center p-4 relative overflow-hidden">
-    <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
-    <div className="w-24 h-24 bg-navy-900 rounded-full flex items-center justify-center mb-6 border border-gold-500/20 animate-pulse shadow-[0_0_30px_rgba(255,215,0,0.1)] relative z-10">
-      <Wrench size={48} className="text-gold-500" />
+const MaintenanceScreen = () => {
+  const { t } = useLanguage();
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-white text-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5"></div>
+      <div className="w-24 h-24 bg-navy-900 rounded-full flex items-center justify-center mb-6 border border-gold-500/20 animate-pulse shadow-[0_0_30px_rgba(255,215,0,0.1)] relative z-10">
+        <Wrench size={48} className="text-gold-500" />
+      </div>
+      <h1 className="text-4xl font-bold mb-4 text-white relative z-10">{t('maintenance_title')}</h1>
+      <p className="text-gray-400 max-w-md text-lg relative z-10">
+        {t('maintenance_desc')}
+      </p>
     </div>
-    <h1 className="text-4xl font-bold mb-4 text-white relative z-10">الموقع تحت الصيانة</h1>
-    <p className="text-gray-400 max-w-md text-lg relative z-10">
-      نقوم حالياً بإجراء تحسينات هامة لتقديم تجربة تداول أفضل.
-      <br />سنعود للعمل قريباً جداً.
-    </p>
-  </div>
-);
+  );
+};
 
 const AppContent = () => {
   const { siteSettings, user, loading } = useStore();
+  const { dir } = useLanguage();
   const location = useLocation();
 
   // Security: Disable Right Click & Copy
@@ -80,7 +83,6 @@ const AppContent = () => {
 
   if (loading) return <LoadingScreen />;
 
-  // منطق وضع الصيانة
   if (siteSettings.maintenance_mode && user?.role !== 'admin') {
     if (location.pathname !== '/login') {
        return <MaintenanceScreen />;
@@ -88,7 +90,7 @@ const AppContent = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col text-white font-cairo bg-transparent">
+    <div className={`min-h-screen flex flex-col text-white font-cairo bg-transparent ${dir === 'rtl' ? 'text-right' : 'text-left'}`} dir={dir}>
       <Navbar />
       <main className="flex-grow w-full">
         <Suspense fallback={<LoadingScreen />}>
@@ -113,11 +115,13 @@ function App() {
   return (
     <ToastProvider>
       <StoreProvider>
-        <Router>
-          <ErrorBoundary>
-            <AppContent />
-          </ErrorBoundary>
-        </Router>
+        <LanguageProvider>
+          <Router>
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
+          </Router>
+        </LanguageProvider>
       </StoreProvider>
     </ToastProvider>
   );

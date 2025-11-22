@@ -1,64 +1,76 @@
 /**
  * Video URL Processing Utility
- * هذا الملف هو المسؤول عن تحويل الروابط المختلفة إلى صيغ قابلة للتشغيل
+ * "Radical Solution" - Handles everything from simple links to complex script embeds.
  */
 
-export const processVideoUrl = (url: string) => {
-  if (!url) return { url: '', type: 'unknown' };
+import ReactPlayer from 'react-player';
+
+export const processVideoUrl = (input: string) => {
+  if (!input) return { url: '', type: 'unknown', isEmbed: false };
   
-  let cleanUrl = url.trim();
-  let type = 'iframe'; // الافتراضي
+  const cleanInput = input.trim();
 
-  // 1. YouTube (الأكثر شيوعاً)
-  // يدعم الروابط المختصرة والكاملة وروابط التضمين
-  if (cleanUrl.match(/(youtube\.com|youtu\.be)/)) {
-    return { url: cleanUrl, type: 'react-player' };
+  // 1. DETECT RAW EMBED CODE (The "Radical" Fix)
+  // If the input contains HTML tags like <iframe, <div, <script, <embed, <object
+  // We treat it as "Raw Embed" and render it directly.
+  if (/<(iframe|div|script|embed|object|video)/i.test(cleanInput)) {
+    return { 
+      url: cleanInput, 
+      type: 'embed', 
+      isEmbed: true 
+    };
   }
 
-  // 2. Vimeo
-  if (cleanUrl.match(/vimeo\.com/)) {
-    return { url: cleanUrl, type: 'react-player' };
+  // 2. DETECT REACT PLAYER SUPPORTED URLS
+  // YouTube, Vimeo, SoundCloud, Facebook, DailyMotion, Twitch, etc.
+  // Also direct files (mp4, m3u8, etc.)
+  if (ReactPlayer.canPlay(cleanInput)) {
+    return { 
+      url: cleanInput, 
+      type: 'react-player', 
+      isEmbed: false 
+    };
   }
 
-  // 3. ملفات الفيديو المباشرة (MP4, MOV, WEBM)
-  // هذه تعمل بشكل ممتاز مع ReactPlayer
-  if (cleanUrl.match(/\.(mp4|webm|ogg|mov|m4v)$/i)) {
-    return { url: cleanUrl, type: 'react-player' };
-  }
+  // 3. FALLBACK: GENERIC URL (Force Iframe)
+  // If it's a URL but ReactPlayer doesn't know it (e.g. a custom private server link),
+  // we assume it's a direct link to an embeddable page.
+  return { 
+    url: cleanInput, 
+    type: 'iframe', 
+    isEmbed: false 
+  };
+};
 
-  // 4. Google Drive (المشكلة الأكبر عادة)
-  // نقوم بتحويل رابط العرض العادي إلى رابط معاينة (Preview) الذي يقبل التضمين
-  if (cleanUrl.includes('drive.google.com')) {
-    type = 'iframe';
+export const calculateTotalDuration = (lessons: { duration: string }[]): string => {
+  let totalSeconds = 0;
+
+  lessons.forEach(lesson => {
+    if (!lesson.duration) return;
     
-    // إزالة أي بارامترات قد تعيق التشغيل
-    if (cleanUrl.includes('/view')) {
-      cleanUrl = cleanUrl.replace(/\/view.*/, '/preview');
-    } else if (cleanUrl.includes('/edit')) {
-      cleanUrl = cleanUrl.replace(/\/edit.*/, '/preview');
-    } else if (!cleanUrl.includes('/preview')) {
-      // إذا كان الرابط ينتهي بالمعرف فقط
-      if (cleanUrl.endsWith('/')) cleanUrl += 'preview';
-      else cleanUrl += '/preview';
+    const parts = lesson.duration.split(':').map(part => parseInt(part, 10));
+    
+    if (parts.some(isNaN)) return;
+
+    if (parts.length === 3) {
+      // HH:MM:SS
+      totalSeconds += (parts[0] * 3600) + (parts[1] * 60) + parts[2];
+    } else if (parts.length === 2) {
+      // MM:SS
+      totalSeconds += (parts[0] * 60) + parts[1];
+    } else if (parts.length === 1) {
+      // Minutes only (legacy support)
+      totalSeconds += parts[0] * 60;
     }
-  }
+  });
 
-  // 5. Dropbox
-  else if (cleanUrl.includes('dropbox.com')) {
-    type = 'react-player';
-    // تحويل dl=0 إلى raw=1 للحصول على دفق الفيديو المباشر
-    cleanUrl = cleanUrl.replace('dl=0', 'raw=1');
-  }
+  if (totalSeconds === 0) return "0 دقيقة";
 
-  // 6. Zoom Recordings / Microsoft Teams / Other Embeds
-  // إذا قام المستخدم بوضع كود iframe كامل بدلاً من الرابط
-  else if (cleanUrl.includes('<iframe')) {
-     const srcMatch = cleanUrl.match(/src="([^"]+)"/);
-     if (srcMatch && srcMatch[1]) {
-       cleanUrl = srcMatch[1];
-       type = 'iframe';
-     }
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  
+  if (hours > 0) {
+    return `${hours} ساعة ${minutes > 0 ? `و ${minutes} دقيقة` : ''}`;
   }
-
-  return { url: cleanUrl, type };
+  return `${minutes} دقيقة`;
 };

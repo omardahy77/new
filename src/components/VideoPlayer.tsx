@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import ReactPlayer from 'react-player';
 import { useStore } from '../context/Store';
 import { processVideoUrl } from '../utils/videoHelpers';
-import { Loader2, Play, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Subtitle } from '../types';
 
 interface VideoPlayerProps {
@@ -23,29 +23,27 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
   const [resumed, setResumed] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState(0);
 
-  const { url: processedUrl, type } = processVideoUrl(url);
+  // Process the input to decide strategy
+  const { url: processedUrl, type, isEmbed } = processVideoUrl(url);
 
-  // Load saved progress when lesson changes
+  // Reset state when lesson changes
   useEffect(() => {
     setReady(false);
     setPlaying(false);
     setError(false);
     setResumed(false);
     
-    const loadProgress = async () => {
-      const progress = await getLessonProgress(lessonId);
-      if (progress && progress.position > 0 && playerRef.current) {
-        // We defer seeking until onReady
-      }
-    };
-    loadProgress();
-  }, [lessonId]);
+    // For embeds/iframes, we assume they are "ready" immediately because we can't track their loading state easily
+    if (type === 'embed' || type === 'iframe') {
+        setReady(true);
+    }
+  }, [lessonId, type]);
 
+  // --- REACT PLAYER LOGIC (YouTube, MP4, etc.) ---
   const handleReady = async () => {
     setReady(true);
-    setPlaying(true); // Auto-play on ready
+    setPlaying(true); // Auto-play
     
-    // Resume logic
     if (!resumed) {
       const progress = await getLessonProgress(lessonId);
       if (progress && progress.position > 5 && !progress.is_completed) {
@@ -57,8 +55,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
 
   const handleProgress = useCallback((state: { playedSeconds: number; loadedSeconds: number; played: number }) => {
     const currentTime = state.playedSeconds;
-    
-    // Save every 10 seconds
     if (currentTime - lastSavedTime > 10) {
       saveLessonProgress(lessonId, currentTime, playerRef.current?.getDuration() || 0, false);
       setLastSavedTime(currentTime);
@@ -70,52 +66,53 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
     if (onEnded) onEnded();
   };
 
-  // Configure subtitles for MP4/HLS
-  const fileConfig = {
-    attributes: {
-      crossOrigin: 'true', // Required for VTT
-      controlsList: 'nodownload'
-    },
-    tracks: subtitles?.map(sub => ({
-      kind: 'subtitles',
-      src: sub.vtt_url,
-      srcLang: sub.lang,
-      label: sub.label,
-      default: sub.lang === 'en' // Default to English if present
-    }))
-  };
+  // --- RENDERERS ---
 
-  if (error || type === 'iframe') {
-    // Fallback for generic iframes or errors
-    if (type === 'iframe') {
-        return (
-            <iframe
-                src={processedUrl}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-            />
-        );
-    }
-    
+  // 1. Error State
+  if (error) {
     return (
       <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f172a] text-white p-8 text-center z-10">
         <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4">
             <AlertTriangle size={32} className="text-red-500" />
         </div>
         <h3 className="text-xl font-bold mb-2">تعذر تشغيل الفيديو</h3>
-        <a 
-            href={url} 
-            target="_blank" 
-            rel="noreferrer"
-            className="btn-gold px-6 py-3 flex items-center gap-2"
-        >
-            <ExternalLink size={18} /> مشاهدة عبر المصدر
+        <p className="text-gray-400 mb-4 text-sm">الرابط قد يكون معطلاً أو محظوراً.</p>
+        <a href={url} target="_blank" rel="noreferrer" className="btn-gold px-6 py-3 flex items-center gap-2">
+            <ExternalLink size={18} /> فتح الرابط الأصلي
         </a>
       </div>
     );
   }
 
+  // 2. RAW EMBED CODE (The "Radical" Solution)
+  if (type === 'embed') {
+      return (
+          <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+             {/* We inject the HTML directly. We wrap it in a div that forces responsive behavior */}
+             <div 
+                className="w-full h-full flex items-center justify-center [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:border-0 [&>div]:w-full [&>div]:h-full"
+                dangerouslySetInnerHTML={{ __html: processedUrl }}
+             />
+          </div>
+      );
+  }
+
+  // 3. FALLBACK IFRAME (For unknown URLs)
+  if (type === 'iframe') {
+      return (
+          <div className="relative w-full h-full bg-black">
+             <iframe
+                src={processedUrl}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                title="Video Player"
+            />
+          </div>
+      );
+  }
+
+  // 4. REACT PLAYER (Standard)
   return (
     <div className="relative w-full h-full bg-black group">
       {!ready && (
@@ -136,7 +133,19 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
         onEnded={handleEnded}
         onError={() => setError(true)}
         config={{
-            file: fileConfig,
+            file: {
+                attributes: {
+                    crossOrigin: 'true',
+                    controlsList: 'nodownload'
+                },
+                tracks: subtitles?.map(sub => ({
+                    kind: 'subtitles',
+                    src: sub.vtt_url,
+                    srcLang: sub.lang,
+                    label: sub.label,
+                    default: sub.lang === 'en'
+                }))
+            },
             youtube: { playerVars: { showinfo: 0, rel: 0, modestbranding: 1 } }
         }}
         style={{ backgroundColor: '#000' }}
