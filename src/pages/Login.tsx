@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
-import { AlertCircle, HelpCircle, Trash2, MailWarning, ShieldAlert, Wrench } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,30 +11,25 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
-  const [isAdminEmail, setIsAdminEmail] = useState(false);
-  const [sessionIssue, setSessionIssue] = useState(false);
   const navigate = useNavigate();
   const { t, dir } = useLanguage();
 
-  useEffect(() => {
-    setIsAdminEmail(email.trim().toLowerCase() === 'admin@sniperfx.com');
-  }, [email]);
-
+  // Check active session
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
-        
-        if (profile?.role === 'admin') {
-           navigate('/admin');
-        } else if (profile) {
-           navigate('/');
-        } else {
-           setSessionIssue(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single();
+          if (profile) {
+             navigate(profile.role === 'admin' ? '/admin' : '/');
+          }
         }
+      } catch (err) {
+        console.error("Session check failed:", err);
+      } finally {
+        setCheckingSession(false);
       }
-      setCheckingSession(false);
     };
     checkSession();
   }, [navigate]);
@@ -44,78 +39,70 @@ export const Login: React.FC = () => {
     setLoading(true);
     setError('');
     
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    
-    if (error) {
-      setError(error.message);
-    } else {
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single();
-      if (profile?.role === 'admin') {
-         navigate('/admin');
-      } else if (profile) {
-         navigate('/');
-      } else {
-         setSessionIssue(true);
+    try {
+      // 1. Attempt Login
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (signInError) {
+        throw new Error(t('login_error') || 'بيانات الدخول غير صحيحة');
       }
-    }
-    setLoading(false);
-  };
 
-  const handleFixProfile = async () => {
-     setLoading(true);
-     const { data: { session } } = await supabase.auth.getSession();
-     if (session) {
-        const { error } = await supabase.from('profiles').upsert({
-            id: session.user.id,
-            email: session.user.email,
-            role: session.user.email === 'admin@sniperfx.com' ? 'admin' : 'student',
-            status: 'active'
-        });
+      if (data.user) {
+        // 2. Check Profile
+        const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
         
-        if (!error) {
-            window.location.reload();
-        } else {
-            setError('Auto-fix failed: ' + error.message);
+        // === SELF HEALING FOR ADMIN ===
+        // If Admin profile is missing, create it immediately.
+        if (!profile && email.toLowerCase() === 'admin@sniperfx.com') {
+           console.log("⚠️ Admin profile missing. Auto-fixing...");
+           
+           const { error: insertError } = await supabase.from('profiles').insert({
+              id: data.user.id,
+              email: email,
+              full_name: 'Admin',
+              role: 'admin',
+              status: 'active'
+           });
+
+           if (insertError) {
+              console.error("❌ Fix failed:", insertError);
+              throw new Error("Failed to restore admin profile. Please check database policies.");
+           } else {
+              console.log("✅ Admin profile fixed. Redirecting...");
+              navigate('/admin');
+              return;
+           }
         }
-     }
-     setLoading(false);
+        // ==============================
+
+        if (!profile) {
+           // If it's a regular user with no profile, sign them out
+           await supabase.auth.signOut();
+           throw new Error(t('account_not_found') || 'الحساب غير موجود، يرجى التسجيل من جديد.');
+        }
+
+        if (profile.role === 'admin') {
+           navigate('/admin');
+        } else {
+           navigate('/');
+        }
+      }
+    } catch (err: any) {
+      console.error("Login Error:", err);
+      setError(err.message || "An unexpected error occurred");
+      // Ensure we don't leave a half-baked session if profile check failed
+      if (err.message === t('account_not_found')) {
+          await supabase.auth.signOut().catch(() => {});
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    window.location.reload();
-  };
-
-  if (checkingSession) {
-    return <div className="min-h-screen flex items-center justify-center bg-navy-950 text-gold-500">{t('loading')}</div>;
-  }
-
-  if (sessionIssue) {
-      return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 px-4" dir={dir}>
-            <div className="glass-card p-8 max-w-md w-full border-yellow-500/30 text-center">
-                <ShieldAlert size={48} className="mx-auto text-yellow-500 mb-4" />
-                <h2 className="text-2xl font-bold text-white mb-2">Account Issue</h2>
-                <p className="text-gray-400 mb-6">
-                    Profile missing. Please try auto-fix.
-                </p>
-                <div className="flex flex-col gap-3">
-                    <button onClick={handleFixProfile} className="btn-gold py-3 font-bold flex items-center justify-center gap-2">
-                        <Wrench size={18} /> Auto-Fix Profile
-                    </button>
-                    <button onClick={handleLogout} className="bg-white/5 text-white py-3 rounded-xl font-bold hover:bg-white/10 border border-white/10">
-                        Logout & Retry
-                    </button>
-                </div>
-            </div>
-        </div>
-      );
-  }
+  if (checkingSession) return <div className="min-h-screen flex items-center justify-center bg-navy-950 text-gold-500">{t('loading')}</div>;
 
   return (
     <div className="min-h-screen flex flex-col pt-[160px] pb-10 relative overflow-hidden" dir={dir}>
-      <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none"></div>
-      
       <div className="w-full max-w-md mx-auto px-4 relative z-10 my-auto">
         <div className="flex justify-center mb-8">
           <Logo className="scale-125" />
@@ -126,11 +113,8 @@ export const Login: React.FC = () => {
           <p className="text-center text-gray-400 mb-8 text-sm">{t('login_subtitle')}</p>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm font-bold flex flex-col gap-2 animate-fade-in">
-              <div className="flex items-center gap-2">
-                 <AlertCircle className="shrink-0" size={18} />
-                 <span>{error}</span>
-              </div>
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm font-bold flex items-center gap-2 animate-fade-in">
+               <AlertCircle size={18} /> {error}
             </div>
           )}
 
@@ -142,8 +126,7 @@ export const Login: React.FC = () => {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className={`w-full bg-[#020617] border rounded-xl p-4 outline-none transition-colors text-white text-left placeholder:text-gray-500 ${isAdminEmail ? 'border-gold-500/50 shadow-[0_0_15px_rgba(255,215,0,0.1)]' : 'border-white/10 focus:border-gold-500'}`}
-                placeholder={t('email_placeholder')}
+                className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 outline-none focus:border-gold-500 transition-colors text-white text-left"
                 dir="ltr"
               />
             </div>
@@ -154,8 +137,7 @@ export const Login: React.FC = () => {
                 required
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none transition-colors text-white text-left placeholder:text-gray-500"
-                placeholder="••••••••"
+                className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none transition-colors text-white text-left"
                 dir="ltr"
               />
             </div>
@@ -163,16 +145,14 @@ export const Login: React.FC = () => {
             <button 
               type="submit" 
               disabled={loading}
-              className="w-full bg-[#FFC400] hover:bg-[#FFD700] text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 disabled:cursor-not-allowed mt-4 text-lg"
+              className="w-full bg-[#FFC400] hover:bg-[#FFD700] text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg"
             >
               {loading ? t('verifying') : t('enter')}
             </button>
           </form>
 
-          <div className="mt-8 text-center text-sm text-gray-400 flex flex-col gap-3">
-            <div>
-                {t('no_account')} <Link to="/register" className="text-gold-400 hover:text-gold-300 font-bold hover:underline transition-colors">{t('create_account')}</Link>
-            </div>
+          <div className="mt-8 text-center text-sm text-gray-400">
+            {t('no_account')} <Link to="/register" className="text-gold-400 hover:text-gold-300 font-bold hover:underline">{t('create_account')}</Link>
           </div>
         </div>
       </div>

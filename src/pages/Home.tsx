@@ -2,10 +2,11 @@ import React from 'react';
 import { useStore } from '../context/Store';
 import { useLanguage } from '../context/LanguageContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { formatDuration } from '../utils/videoHelpers';
 import { 
   ArrowRight, Star, Play, Lock, Crown, 
   LineChart, Shield, Brain, Users, ArrowLeft,
-  Facebook, Instagram, Send, CheckCircle2, UserPlus, LogIn, Target, LayoutDashboard, Sparkles, Video, Phone, Youtube
+  Facebook, Instagram, Send, CheckCircle2, UserPlus, LogIn, Target, LayoutDashboard, Sparkles, Video, Phone, Youtube, Clock, BookOpen
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 
@@ -23,7 +24,6 @@ export const Home: React.FC = () => {
   const content = siteSettings.content_config || {};
   const features = siteSettings.features_config || { show_coming_soon: true, show_stats: true };
 
-  // Helper to get content based on language
   const getContent = (key: string) => {
     if (language === 'en') {
       return (content as any)[`${key}_en`] || (content as any)[key] || '';
@@ -204,14 +204,24 @@ export const Home: React.FC = () => {
                       <h3 className="text-xl font-bold text-white mb-3 group-hover:text-gold-400 transition-colors line-clamp-1">{course.title}</h3>
                       <p className="text-gray-500 text-sm line-clamp-2 mb-6 leading-relaxed">{course.description}</p>
                       
+                      <div className="flex items-center gap-6 text-xs text-gray-500 font-bold mb-6">
+                         <div className="flex items-center gap-1.5">
+                            <Clock size={14} className="text-gold-500" />
+                            <span>{formatDuration(course.duration, language)}</span>
+                         </div>
+                         <div className="flex items-center gap-1.5">
+                            <BookOpen size={14} className="text-gold-500" />
+                            <span>{course.lesson_count || 0} {t('lessons')}</span>
+                         </div>
+                      </div>
+
                       <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
-                        <span className="text-xs text-gray-500 font-bold flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-gold-500"></div>
-                          {course.lesson_count || 12} {t('lessons')}
-                        </span>
                         <span className={`text-sm font-bold transition-colors ${hasAccess ? 'text-gold-500 group-hover:text-gold-400' : 'text-gray-600'}`}>
                           {hasAccess ? t('watch_now') : t('login_to_access')}
                         </span>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${hasAccess ? 'border-gold-500 text-gold-500' : 'border-gray-700 text-gray-700'}`}>
+                            {hasAccess ? <Play size={12} fill="currentColor" /> : <Lock size={12} />}
+                        </div>
                       </div>
                     </div>
                   </div>

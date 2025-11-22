@@ -161,9 +161,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           .select('*')
           .eq('user_id', userId);
         if (enrollData) setEnrollments(enrollData as Enrollment[]);
+      } else {
+        // If profile fetch fails (user deleted), sign out
+        console.log("Profile not found, signing out...");
+        await signOut();
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
+      // Safety logout on critical error
+      await signOut();
     }
   };
 
@@ -177,7 +183,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const fetchSettings = async () => {
     const { data } = await supabase.from('site_settings').select('*').single();
     if (data) {
-      // Deep merge to ensure no keys are missing if the DB has partial data
       setSiteSettings({
         ...defaultSettings,
         ...data,
@@ -188,7 +193,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         content_config: { ...defaultSettings.content_config, ...(data.content_config || {}) }
       });
     } else {
-      // If no settings exist, insert defaults
       const { data: newData, error } = await supabase.from('site_settings').insert(defaultSettings).select().single();
       if (newData && !error) {
          setSiteSettings({ ...defaultSettings, ...newData });
@@ -231,6 +235,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     fetchCourses();
     fetchSettings();
 
+    // 1. REAL-TIME SUBSCRIPTIONS
+    const coursesChannel = supabase.channel('public:courses')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courses' }, () => {
+        fetchCourses();
+      })
+      .subscribe();
+
+    const settingsChannel = supabase.channel('public:site_settings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'site_settings' }, () => {
+        fetchSettings();
+      })
+      .subscribe();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setTimeout(async () => {
         if (session?.user) {
@@ -243,20 +260,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }, 0);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+      supabase.removeChannel(coursesChannel);
+      supabase.removeChannel(settingsChannel);
+    };
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setEnrollments([]);
+    try {
+      // Clear state immediately to update UI
+      setUser(null);
+      setEnrollments([]);
+      // Attempt Supabase signout, but don't crash if it fails (e.g. network error)
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.warn("Sign out error (ignored):", error);
+    }
   };
 
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
     if (siteSettings.id) {
-      const { error } = await supabase.from('site_settings').update(newSettings).eq('id', siteSettings.id);
+      const mergedSettings = {
+        ...siteSettings,
+        ...newSettings,
+        features_config: newSettings.features_config || siteSettings.features_config,
+        content_config: newSettings.content_config || siteSettings.content_config,
+      };
+
+      const { error } = await supabase.from('site_settings').update(mergedSettings).eq('id', siteSettings.id);
+      
       if (!error) {
-        setSiteSettings(prev => ({ ...prev, ...newSettings }));
+        setSiteSettings(mergedSettings);
       } else {
         console.error("Error updating settings:", error);
         throw error;

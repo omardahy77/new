@@ -43,9 +43,13 @@ export const translations = {
     login_to_watch: 'سجل للدخول',
     lessons_count: 'درس',
     duration_min: 'دقيقة',
+    duration_hour: 'ساعة',
     free: 'مجاني',
     premium: 'مدفوع',
     no_courses: 'لا توجد كورسات متاحة للعرض حالياً.',
+    level_beginner: 'مبتدئ',
+    level_intermediate: 'متوسط',
+    level_expert: 'خبير',
     
     // Course Detail
     course_content: 'محتوى الكورس',
@@ -84,6 +88,7 @@ export const translations = {
     processing: 'جاري المعالجة...',
     verifying: 'جاري التحقق...',
     enter: 'دخول',
+    account_not_found: 'الحساب غير موجود أو تم حذفه.',
     
     // Admin
     admin_panel: 'لوحة التحكم الشاملة',
@@ -99,6 +104,9 @@ export const translations = {
     lang_edit: 'لغة التعديل',
     arabic: 'العربية',
     english: 'English',
+    confirm_delete_user: 'هل أنت متأكد أنك تريد حذف هذا العضو نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+    user_deleted: 'تم حذف العضو بنجاح',
+    delete_failed: 'فشل الحذف',
     
     // Features
     feat_analysis: 'تحليل فني متقدم',
@@ -152,9 +160,13 @@ export const translations = {
     login_to_watch: 'Login to Watch',
     lessons_count: 'Lessons',
     duration_min: 'Min',
+    duration_hour: 'Hour',
     free: 'Free',
     premium: 'Premium',
     no_courses: 'No courses available at the moment.',
+    level_beginner: 'Beginner',
+    level_intermediate: 'Intermediate',
+    level_expert: 'Expert',
     
     // Course Detail
     course_content: 'Course Content',
@@ -193,6 +205,7 @@ export const translations = {
     processing: 'Processing...',
     verifying: 'Verifying...',
     enter: 'Enter',
+    account_not_found: 'Account not found or has been deleted.',
     
     // Admin
     admin_panel: 'Admin Dashboard',
@@ -208,6 +221,9 @@ export const translations = {
     lang_edit: 'Editing Language',
     arabic: 'Arabic',
     english: 'English',
+    confirm_delete_user: 'Are you sure you want to permanently delete this user? This cannot be undone.',
+    user_deleted: 'User deleted successfully',
+    delete_failed: 'Delete failed',
 
     // Features
     feat_analysis: 'Advanced Technical Analysis',

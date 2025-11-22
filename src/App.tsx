@@ -5,7 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { Wrench, Loader2 } from 'lucide-react';
+import { Wrench, Loader2, AlertTriangle, RefreshCcw } from 'lucide-react';
 
 // Lazy Load Pages
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
@@ -24,15 +24,31 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
   static getDerivedStateFromError() { return { hasError: true }; }
   render() {
-    if (this.state.hasError) return <div className="p-10 text-center text-red-500">Something went wrong. Please refresh.</div>;
+    if (this.state.hasError) return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-white p-6 text-center">
+            <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mb-6 border border-red-500/20">
+                <AlertTriangle size={40} className="text-red-500" />
+            </div>
+            <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
+            <p className="text-gray-400 mb-6">Please refresh the page to continue.</p>
+            <button onClick={() => window.location.reload()} className="btn-gold px-8 py-3 flex items-center gap-2">
+                <RefreshCcw size={18} /> Refresh Page
+            </button>
+        </div>
+    );
     return this.props.children;
   }
 }
 
 const LoadingScreen = () => (
   <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-gold-500">
-    <Loader2 size={48} className="animate-spin mb-4" />
-    <p className="text-lg font-bold animate-pulse">Loading...</p>
+    <div className="relative">
+        <div className="w-16 h-16 border-4 border-gold-500/20 border-t-gold-500 rounded-full animate-spin"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-2 h-2 bg-gold-500 rounded-full"></div>
+        </div>
+    </div>
+    <p className="text-lg font-bold mt-4 animate-pulse tracking-widest">SNIPER FX</p>
   </div>
 );
 

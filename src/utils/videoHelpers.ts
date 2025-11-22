@@ -1,18 +1,16 @@
 /**
- * Video URL Processing Utility
- * "Radical Solution" - Handles everything from simple links to complex script embeds.
+ * Video URL Processing & Time Formatting Utility
  */
 
 import ReactPlayer from 'react-player';
+import { translations } from './translations';
 
 export const processVideoUrl = (input: string) => {
   if (!input) return { url: '', type: 'unknown', isEmbed: false };
   
   const cleanInput = input.trim();
 
-  // 1. DETECT RAW EMBED CODE (The "Radical" Fix)
-  // If the input contains HTML tags like <iframe, <div, <script, <embed, <object
-  // We treat it as "Raw Embed" and render it directly.
+  // 1. DETECT RAW EMBED CODE
   if (/<(iframe|div|script|embed|object|video)/i.test(cleanInput)) {
     return { 
       url: cleanInput, 
@@ -22,8 +20,6 @@ export const processVideoUrl = (input: string) => {
   }
 
   // 2. DETECT REACT PLAYER SUPPORTED URLS
-  // YouTube, Vimeo, SoundCloud, Facebook, DailyMotion, Twitch, etc.
-  // Also direct files (mp4, m3u8, etc.)
   if (ReactPlayer.canPlay(cleanInput)) {
     return { 
       url: cleanInput, 
@@ -33,8 +29,6 @@ export const processVideoUrl = (input: string) => {
   }
 
   // 3. FALLBACK: GENERIC URL (Force Iframe)
-  // If it's a URL but ReactPlayer doesn't know it (e.g. a custom private server link),
-  // we assume it's a direct link to an embeddable page.
   return { 
     url: cleanInput, 
     type: 'iframe', 
@@ -42,13 +36,16 @@ export const processVideoUrl = (input: string) => {
   };
 };
 
-export const calculateTotalDuration = (lessons: { duration: string }[]): string => {
+// New Helper: Returns just the total minutes (number)
+export const calculateTotalMinutes = (lessons: { duration: string }[]): number => {
   let totalSeconds = 0;
 
   lessons.forEach(lesson => {
     if (!lesson.duration) return;
     
-    const parts = lesson.duration.split(':').map(part => parseInt(part, 10));
+    // Remove non-numeric chars except colon
+    const cleanDuration = lesson.duration.replace(/[^\d:]/g, '');
+    const parts = cleanDuration.split(':').map(part => parseInt(part, 10));
     
     if (parts.some(isNaN)) return;
 
@@ -59,18 +56,43 @@ export const calculateTotalDuration = (lessons: { duration: string }[]): string 
       // MM:SS
       totalSeconds += (parts[0] * 60) + parts[1];
     } else if (parts.length === 1) {
-      // Minutes only (legacy support)
+      // Minutes only
       totalSeconds += parts[0] * 60;
     }
   });
 
-  if (totalSeconds === 0) return "0 دقيقة";
+  return Math.floor(totalSeconds / 60);
+};
 
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
+// STRICT Duration Formatter to avoid "Minute Minute"
+export const formatDuration = (durationRaw: string | number | undefined, lang: 'ar' | 'en' = 'ar'): string => {
+  if (!durationRaw) return '0';
   
-  if (hours > 0) {
-    return `${hours} ساعة ${minutes > 0 ? `و ${minutes} دقيقة` : ''}`;
+  let minutes = 0;
+
+  if (typeof durationRaw === 'number') {
+    minutes = durationRaw;
+  } else {
+    // If string contains colon (e.g. "02:30:00"), return as is (Time format)
+    if (durationRaw.includes(':')) {
+       return durationRaw;
+    }
+    
+    // Extract ONLY digits. "30 min" -> 30. "30 دقيقة" -> 30.
+    const digits = durationRaw.replace(/\D/g, '');
+    minutes = parseInt(digits, 10) || 0;
   }
-  return `${minutes} دقيقة`;
+
+  const t = translations[lang];
+  
+  // Logic: If > 60 mins, show Hours + Mins. Else show Mins.
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) return `${hours} ${t.duration_hour}`;
+    return `${hours} ${t.duration_hour} ${lang === 'ar' ? 'و' : '&'} ${mins} ${t.duration_min}`;
+  }
+  
+  // Returns "30 Min" or "30 دقيقة"
+  return `${minutes} ${t.duration_min}`;
 };

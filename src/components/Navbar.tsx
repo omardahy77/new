@@ -30,13 +30,14 @@ export const Navbar: React.FC = () => {
     setLanguage(language === 'ar' ? 'en' : 'ar');
   };
 
+  // Updated NavLink to match the "Pill" design
   const NavLink = ({ to, label }: { to: string, label: string }) => (
     <Link 
       to={to} 
       onClick={() => window.scrollTo(0,0)}
-      className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-300 whitespace-nowrap flex items-center justify-center ${
+      className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 whitespace-nowrap flex items-center justify-center ${
         location.pathname === to 
-          ? 'bg-gold-500 text-navy-950 shadow-md shadow-gold-500/20' 
+          ? 'bg-gold-500 text-navy-950 shadow-[0_0_20px_rgba(255,215,0,0.3)]' 
           : 'text-gray-300 hover:text-white hover:bg-white/5'
       }`}
     >
@@ -55,12 +56,14 @@ export const Navbar: React.FC = () => {
             <Logo className={`${scrolled ? 'scale-90' : 'scale-95'} transition-transform duration-300 origin-right rtl:origin-right ltr:origin-left`} />
           </Link>
 
-          {/* Desktop Menu - Compact Buttons */}
-          <div className="hidden lg:flex items-center gap-1 mx-4">
-            <NavLink to="/" label={t('home')} />
-            <NavLink to="/courses" label={t('courses')} />
-            <NavLink to="/about" label={t('about')} />
-            <NavLink to="/contact" label={t('contact')} />
+          {/* Desktop Menu - Pill Container Design */}
+          <div className="hidden lg:flex items-center justify-center flex-1 px-4">
+            <div className="flex items-center gap-1 p-1.5 bg-[#0C1220] border border-white/10 rounded-full shadow-lg backdrop-blur-md">
+                <NavLink to="/" label={t('home')} />
+                <NavLink to="/courses" label={t('courses')} />
+                <NavLink to="/about" label={t('about')} />
+                <NavLink to="/contact" label={t('contact')} />
+            </div>
           </div>
 
           {/* Auth Buttons / User Profile */}
