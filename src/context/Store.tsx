@@ -156,13 +156,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .eq('id', userId)
         .single();
       
-      // 2. If profile is missing, TRIGGER AUTO-REPAIR
+      // Check for Recursion Error explicitly
+      if (error && error.code === '42P17') {
+          console.error("🚨 CRITICAL DB ERROR: Infinite Recursion detected in RLS policies.");
+          console.warn("Attempting to bypass by calling RPC or waiting for migration...");
+          // In this specific case, we can't do much client-side except wait for the migration to be applied.
+          // We'll try the RPC as a hail mary, but it might also fail if it's not SECURITY DEFINER.
+      }
+
+      // 2. If profile is missing or error occurred, TRIGGER AUTO-REPAIR
       if (!data || error) {
-        console.warn("⚠️ Profile missing in Store. Attempting Auto-Repair...");
+        console.warn("⚠️ Profile missing or error in Store. Attempting Auto-Repair...");
         
         // Call the new safety net function
         const { error: rpcError } = await supabase.rpc('ensure_user_profile_exists');
         
+        if (rpcError) console.warn("RPC Repair result:", rpcError.message);
+
         // 3. Retry fetch after RPC repair
         let { data: retryData } = await supabase.from('profiles').select('*').eq('id', userId).single();
 
@@ -170,8 +180,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (!retryData) {
             console.warn("⚠️ RPC Repair failed or slow. Waiting for server propagation...");
             // Just wait and retry fetch, do NOT write to DB to avoid 42P17 recursion
-            for (let i = 0; i < 5; i++) {
-                await new Promise(r => setTimeout(r, 800)); // Wait longer
+            for (let i = 0; i < 3; i++) { // Reduced retries to prevent hanging
+                await new Promise(r => setTimeout(r, 1000)); 
                 const { data: finalData } = await supabase.from('profiles').select('*').eq('id', userId).single();
                 if (finalData) {
                     retryData = finalData;
@@ -185,7 +195,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             data = retryData;
             error = null;
         } else {
-            console.error("❌ Auto-Repair Failed completely");
+            console.warn("⚠️ RPC Repair failed. Attempting direct client-side creation...");
+           
+            // FINAL FALLBACK: Client-side Insert
+            // We use a simple INSERT if upsert fails, to avoid complex policy checks
+            const { data: createdData, error: createError } = await supabase
+               .from('profiles')
+               .insert([{
+                   id: userId,
+                   email: userEmail,
+                   role: 'student', // Default role
+                   full_name: userEmail?.split('@')[0] || 'New User',
+                   status: 'active', // Default status to allow login
+                   created_at: new Date().toISOString(),
+                   updated_at: new Date().toISOString()
+               }])
+               .select()
+               .single();
+
+            if (createdData && !createError) {
+               console.log("✅ Client-side Self-Healing Successful!");
+               data = createdData;
+               error = null;
+            } else {
+               console.error("❌ Auto-Repair Failed completely:", createError);
+            }
         }
       }
 

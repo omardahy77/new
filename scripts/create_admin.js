@@ -1,56 +1,153 @@
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
 
-const supabaseUrl = 'https://napscysbreibhxsbucfz.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hcHNjeXNicmVpYmh4c2J1Y2Z6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2NTIwODYsImV4cCI6MjA3OTIyODA4Nn0.Agju79hJ6_kXXbGQ-IWHEIGxwdb7V3hJ68QdbCVGsPw';
+dotenv.config();
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://sthqwnxqxjcvahfxwjyq.supabase.co';
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-async function recreateAdmin() {
-  console.log('🚀 بدء عملية إعادة إنشاء حساب المشرف...');
+// Robust check for Service Key
+const hasServiceKey = serviceRoleKey && !serviceRoleKey.includes('*') && serviceRoleKey.length > 20;
 
-  const email = 'admin@sniperfx.com';
-  const password = 'Hamza0100@';
+// Initialize Supabase
+const supabase = createClient(supabaseUrl, hasServiceKey ? serviceRoleKey : anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+});
 
-  // 1. تسجيل حساب جديد (لأننا حذفنا القديم في الـ Migration)
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: 'Admin',
-        role: 'admin',
-        status: 'active'
-      }
-    }
-  });
-
-  if (error) {
-    console.log('⚠️ ملاحظة:', error.message);
-    // إذا قال الحساب موجود، نحاول تسجيل الدخول
-    if (error.message.includes('already registered')) {
-        console.log('🔄 الحساب موجود، جاري محاولة تسجيل الدخول وإصلاح البروفايل...');
-        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
-        
-        if (loginData?.user) {
-            // فرض إنشاء البروفايل
-            const { error: upsertError } = await supabase.from('profiles').upsert({
-                id: loginData.user.id,
-                email: email,
-                full_name: 'Admin',
-                role: 'admin',
-                status: 'active'
-            });
+async function run() {
+    console.log('\n🔧 STARTING MASTER ADMIN REPAIR...');
+    console.log('---------------------------------------');
+    
+    const password = 'Hamza0100@';
+    
+    // 1. Try Primary Admin
+    const primaryEmail = 'admin@sniperfx.com';
+    console.log(`👉 Attempting to fix: ${primaryEmail}`);
+    
+    if (hasServiceKey) {
+        await fixUserWithServiceKey(primaryEmail, password);
+    } else {
+        const success = await tryPublicFix(primaryEmail, password);
+        if (!success) {
+            // 2. Fallback to Recovery Admin
+            console.log('\n⚠️ Primary admin locked. Trying Recovery Admin...');
+            const recoveryEmail = 'recovery@sniperfx.com';
+            const recSuccess = await tryPublicFix(recoveryEmail, password);
             
-            if (upsertError) console.error('❌ فشل إصلاح البروفايل:', upsertError.message);
-            else console.log('✅ تم إصلاح البروفايل بنجاح.');
+            if (!recSuccess) {
+                // 3. Fallback to Unique Admin (Last Resort)
+                console.log('\n⚠️ Recovery admin locked. Generating Emergency Access...');
+                const randomSuffix = Math.floor(Math.random() * 1000);
+                const emergencyEmail = `admin${randomSuffix}@sniperfx.com`;
+                await tryPublicFix(emergencyEmail, password);
+            }
         }
     }
-  } else if (data.user) {
-    console.log('✅ تم إنشاء حساب المشرف الجديد بنجاح!');
-    console.log('🆔 User ID:', data.user.id);
-  }
-
-  console.log('✨ العملية اكتملت.');
 }
 
-recreateAdmin();
+async function fixUserWithServiceKey(email, password) {
+    try {
+        const { data: { users } } = await supabase.auth.admin.listUsers();
+        const user = users.find(u => u.email === email);
+        
+        if (user) {
+            await supabase.auth.admin.updateUserById(user.id, { 
+                password, email_confirm: true, user_metadata: { role: 'admin' } 
+            });
+            console.log(`   ✅ Fixed existing user: ${email}`);
+            await ensureProfile(user.id, email);
+        } else {
+            const { data } = await supabase.auth.admin.createUser({
+                email, password, email_confirm: true, user_metadata: { role: 'admin' }
+            });
+            console.log(`   ✅ Created new user: ${email}`);
+            await ensureProfile(data.user.id, email);
+        }
+        printSuccess(email, password);
+    } catch (e) {
+        console.error('   ❌ Service Key Error:', e.message);
+    }
+}
+
+async function tryPublicFix(email, password) {
+    try {
+        // Try Login First (to see if password works)
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+        
+        if (signInData?.user) {
+            console.log(`   ✅ Login successful for: ${email}`);
+            await ensureProfile(signInData.user.id, email);
+            printSuccess(email, password);
+            return true;
+        }
+
+        // If login failed, try SignUp
+        if (signInError && signInError.message.includes('Invalid login')) {
+            console.log(`   ❌ Password mismatch for ${email}. Cannot reset without Service Key.`);
+            return false; 
+        }
+
+        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email, password, options: { data: { full_name: 'Admin', role: 'admin' } }
+        });
+
+        if (signUpData?.user) {
+            if (!signUpData.session) {
+                console.log(`   ⚠️  User created but requires Email Confirmation: ${email}`);
+                console.log('   👉 DISABLE "Confirm Email" in Supabase Dashboard to use this account.');
+                return false;
+            }
+            console.log(`   ✅ Created new user: ${email}`);
+            await ensureProfile(signUpData.user.id, email);
+            printSuccess(email, password);
+            return true;
+        }
+        
+        if (signUpError) {
+            console.log(`   ❌ SignUp failed: ${signUpError.message}`);
+            return false;
+        }
+        
+        return false;
+    } catch (e) {
+        console.error('   ❌ Error:', e.message);
+        return false;
+    }
+}
+
+async function ensureProfile(userId, email) {
+    // Try to upsert profile. 
+    // Note: If using Anon Key, RLS might block UPDATE if we don't own the row.
+    // But INSERT should work if it doesn't exist.
+    
+    const { error } = await supabase.from('profiles').upsert({
+        id: userId,
+        email: email,
+        full_name: 'Admin',
+        role: 'admin',
+        status: 'active',
+        updated_at: new Date().toISOString()
+    });
+
+    if (error) {
+        // If upsert failed (likely RLS on update), try simple insert (ignore conflict)
+        if (error.code === '42501') { // Permission denied
+             console.log('   ⚠️  RLS blocked profile update. Assuming profile exists.');
+        } else {
+             console.log(`   ⚠️  Profile sync warning: ${error.message}`);
+        }
+    } else {
+        console.log('   ✅ Profile synced.');
+    }
+}
+
+function printSuccess(email, password) {
+    console.log('\n✨ LOGIN SUCCESSFUL! USE THESE CREDENTIALS:');
+    console.log('---------------------------------------');
+    console.log(`   📧 Email:    ${email}`);
+    console.log(`   🔑 Password: ${password}`);
+    console.log('---------------------------------------\n');
+}
+
+run();
