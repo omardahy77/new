@@ -146,14 +146,50 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
+  // === INTELLIGENT PROFILE FETCHING ===
+  const fetchProfile = async (userId: string, userEmail?: string) => {
     try {
-      const { data, error } = await supabase
+      // 1. Try to get the profile normally
+      let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
       
+      // 2. If profile is missing, TRIGGER AUTO-REPAIR
+      if (!data || error) {
+        console.warn("⚠️ Profile missing in Store. Attempting Auto-Repair...");
+        
+        // Call the new safety net function
+        const { error: rpcError } = await supabase.rpc('ensure_user_profile_exists');
+        
+        // 3. Retry fetch after RPC repair
+        let { data: retryData } = await supabase.from('profiles').select('*').eq('id', userId).single();
+
+        // 4. FINAL FALLBACK: Wait for Server Propagation
+        if (!retryData) {
+            console.warn("⚠️ RPC Repair failed or slow. Waiting for server propagation...");
+            // Just wait and retry fetch, do NOT write to DB to avoid 42P17 recursion
+            for (let i = 0; i < 5; i++) {
+                await new Promise(r => setTimeout(r, 800)); // Wait longer
+                const { data: finalData } = await supabase.from('profiles').select('*').eq('id', userId).single();
+                if (finalData) {
+                    retryData = finalData;
+                    break;
+                }
+            }
+        }
+
+        if (retryData) {
+            console.log("✅ Auto-Repair Successful!");
+            data = retryData;
+            error = null;
+        } else {
+            console.error("❌ Auto-Repair Failed completely");
+        }
+      }
+
+      // 5. Set User State
       if (data && !error) {
         setUser(data as User);
         const { data: enrollData } = await supabase
@@ -162,14 +198,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           .eq('user_id', userId);
         if (enrollData) setEnrollments(enrollData as Enrollment[]);
       } else {
-        // If profile fetch fails (user deleted), sign out
-        console.log("Profile not found, signing out...");
-        await signOut();
+        // Fallback: Don't crash, just wait.
+        console.log("Still unable to load profile. Waiting...");
+        setUser(null);
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
-      // Safety logout on critical error
-      await signOut();
+      console.error("Critical Error fetching profile:", error);
+      setUser(null);
     }
   };
 
@@ -249,15 +284,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .subscribe();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Use a small delay to allow DB triggers to complete before fetching profile
       setTimeout(async () => {
         if (session?.user) {
-          await fetchProfile(session.user.id);
+          await fetchProfile(session.user.id, session.user.email);
         } else {
           setUser(null);
           setEnrollments([]);
         }
         setLoading(false);
-      }, 0);
+      }, 100);
     });
 
     return () => {

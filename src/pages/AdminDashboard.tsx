@@ -9,7 +9,7 @@ import {
   Users, BookOpen, Settings, Plus, Trash2, 
   UserPlus, Video, X, PlayCircle, Edit2,
   FileText, Image as ImageIcon, Code,
-  Globe, RefreshCw, ShieldAlert, Database, Wifi, WifiOff
+  Globe, RefreshCw, ShieldAlert, Wifi, WifiOff
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -267,7 +267,18 @@ export const AdminDashboard: React.FC = () => {
       return (localSettings as any)[key] || '';
   };
 
-  if (user?.role !== 'admin') return <div className="min-h-screen flex items-center justify-center text-white">Access Denied</div>;
+  if (user?.role !== 'admin') {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-white p-4 text-center">
+            <ShieldAlert size={64} className="text-red-500 mb-4" />
+            <h1 className="text-3xl font-bold mb-2">Access Denied</h1>
+            <p className="text-gray-400 mb-6">You do not have permission to view this page.</p>
+            <button onClick={() => window.location.href = '/'} className="btn-gold px-8 py-3 rounded-xl font-bold">
+                Go Home
+            </button>
+        </div>
+      );
+  }
 
   return (
     <div className="min-h-screen page-padding-top pb-10 bg-navy-950" dir="rtl">
@@ -390,7 +401,7 @@ export const AdminDashboard: React.FC = () => {
                  </div>
                )}
 
-               {/* COURSES TAB & OTHERS (Unchanged Logic) */}
+               {/* COURSES TAB */}
                {activeTab === 'courses' && (
                  <div className="animate-fade-in">
                     <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
@@ -422,7 +433,7 @@ export const AdminDashboard: React.FC = () => {
                  </div>
                )}
 
-               {/* CONTENT & SETTINGS TABS (Same as before) */}
+               {/* CONTENT TAB */}
                {activeTab === 'content' && (
                  <div className="animate-fade-in">
                     <div className="flex items-center justify-between mb-6 bg-navy-900 p-3 rounded-xl border border-white/10">
@@ -463,6 +474,7 @@ export const AdminDashboard: React.FC = () => {
                  </div>
                )}
                
+               {/* SETTINGS TAB */}
                {activeTab === 'settings' && (
                  <div className="animate-fade-in">
                     <h2 className="text-xl font-bold mb-6">{t('settings')}</h2>

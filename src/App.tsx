@@ -5,7 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
-import { Wrench, Loader2, AlertTriangle, RefreshCcw } from 'lucide-react';
+import { Wrench, Loader2, AlertTriangle, RefreshCcw, Trash2 } from 'lucide-react';
 
 // Lazy Load Pages
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
@@ -23,6 +23,14 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
     this.state = { hasError: false };
   }
   static getDerivedStateFromError() { return { hasError: true }; }
+  
+  handleReset = () => {
+    // Clear all storage to remove any bad state causing the crash
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/';
+  };
+
   render() {
     if (this.state.hasError) return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-white p-6 text-center">
@@ -30,10 +38,17 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
                 <AlertTriangle size={40} className="text-red-500" />
             </div>
             <h1 className="text-2xl font-bold mb-2">Something went wrong</h1>
-            <p className="text-gray-400 mb-6">Please refresh the page to continue.</p>
-            <button onClick={() => window.location.reload()} className="btn-gold px-8 py-3 flex items-center gap-2">
-                <RefreshCcw size={18} /> Refresh Page
-            </button>
+            <p className="text-gray-400 mb-6 max-w-md">
+                The application encountered an unexpected error. This might be due to a connection issue or cached data.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4">
+                <button onClick={() => window.location.reload()} className="btn-gold px-8 py-3 flex items-center justify-center gap-2">
+                    <RefreshCcw size={18} /> Refresh Page
+                </button>
+                <button onClick={this.handleReset} className="px-8 py-3 flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 rounded-xl font-bold transition-colors">
+                    <Trash2 size={18} /> Clear Cache & Restart
+                </button>
+            </div>
         </div>
     );
     return this.props.children;
@@ -119,6 +134,8 @@ const AppContent = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
+            {/* Catch all route for 404 */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
       </main>
