@@ -20,8 +20,17 @@ export const CourseDetail: React.FC = () => {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [progressMap, setProgressMap] = useState<Record<string, LessonProgress>>({});
+
+  useEffect(() => {
+    const handleResize = () => {
+        if (window.innerWidth >= 1024) setSidebarOpen(true);
+        else setSidebarOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
@@ -107,7 +116,7 @@ export const CourseDetail: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-navy-950 overflow-hidden font-cairo pt-[115px]" dir={dir}>
       
-      {/* Professional Header */}
+      {/* Header */}
       <header className="h-16 bg-navy-900 border-b border-white/5 flex items-center justify-between px-6 shrink-0 z-20 shadow-lg relative">
         <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-gold-500/30 to-transparent"></div>
         
@@ -124,8 +133,8 @@ export const CourseDetail: React.FC = () => {
               <CheckCircle size={14} />
               <span>{t('completed')}: {progressPercentage}%</span>
            </div>
-           <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all duration-300 ${sidebarOpen ? 'bg-gold-500 text-navy-950 shadow-[0_0_15px_rgba(255,215,0,0.3)]' : 'bg-navy-800 text-white hover:bg-navy-700'}`}>
-            {sidebarOpen ? <Menu size={20} /> : <Menu size={20} />}
+           <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all duration-300 lg:hidden ${sidebarOpen ? 'bg-gold-500 text-navy-950' : 'bg-navy-800 text-white'}`}>
+            <Menu size={20} />
           </button>
         </div>
       </header>
@@ -134,7 +143,7 @@ export const CourseDetail: React.FC = () => {
       <div className="flex-1 flex overflow-hidden relative bg-navy-950">
         
         {/* Player Area */}
-        <main className="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative">
+        <main className="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative w-full">
           <div className="w-full bg-black relative shadow-2xl shrink-0 aspect-video max-h-[75vh] border-b border-white/5 group">
             {activeLesson ? (
                 <VideoPlayer 
@@ -181,8 +190,15 @@ export const CourseDetail: React.FC = () => {
           </div>
         </main>
 
-        {/* Sidebar Playlist */}
-        <aside className={`fixed lg:relative inset-y-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} w-80 bg-[#0C1220] border-l border-white/5 flex flex-col transition-all duration-300 z-30 shadow-2xl ${sidebarOpen ? 'translate-x-0' : (dir === 'rtl' ? 'translate-x-full' : '-translate-x-full') + ' lg:!w-0 lg:!border-0 lg:overflow-hidden'}`} style={{ paddingTop: window.innerWidth < 1024 ? '64px' : '0' }}>
+        {/* Sidebar Playlist (Overlay on Mobile, Fixed on Desktop) */}
+        <aside className={`
+            fixed lg:relative inset-y-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} 
+            w-80 bg-[#0C1220] border-l border-white/5 flex flex-col transition-transform duration-300 z-30 shadow-2xl
+            ${sidebarOpen ? 'translate-x-0' : (dir === 'rtl' ? 'translate-x-full' : '-translate-x-full')}
+            lg:translate-x-0 lg:w-80 lg:border-l lg:border-white/10
+            ${!sidebarOpen && 'lg:!hidden'}
+        `} style={{ top: window.innerWidth < 1024 ? '115px' : '0' }}>
+          
           <div className="p-6 border-b border-white/5 bg-[#0C1220] sticky top-0 z-10">
             <h3 className="font-bold text-white text-lg mb-2">{t('course_content')}</h3>
             <div className="flex justify-between text-xs text-gray-400 mb-2">

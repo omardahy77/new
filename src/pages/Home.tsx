@@ -38,13 +38,23 @@ export const Home: React.FC = () => {
     return (siteSettings as any)[key] || '';
   };
 
+  // Logic for displaying courses to visitors (Free courses only)
+  // للزوار: نعرض الكورسات المجانية فقط. للمسجلين: نعرض كل الكورسات.
   const availableCourses = user ? courses : courses.filter(c => !c.is_paid);
+  
+  // نأخذ أول 3 كورسات للعرض في الرئيسية
   const featuredCourses = availableCourses.slice(0, 3);
+  
+  // المنطق الجديد: قسم "قريباً" يظهر فقط إذا كان المستخدم مسجلاً (user موجود) والميزة مفعلة
   const showComingSoon = user && features.show_coming_soon;
 
   const handleCourseClick = (courseId: string) => {
-    if (!user) navigate('/register');
-    else navigate(`/course/${courseId}`);
+    if (!user) {
+        // إذا لم يكن مسجلاً، نوجهه لصفحة التسجيل (أو الدخول)
+        navigate('/login'); 
+    } else {
+        navigate(`/course/${courseId}`);
+    }
   };
 
   return (
@@ -102,15 +112,15 @@ export const Home: React.FC = () => {
             
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-black mb-8 tracking-tight leading-[1.1]">
               <span className="block text-white drop-shadow-2xl z-0 relative">
-                {getSetting('hero_title_line1') || "Trade Smart"}
+                {getSetting('hero_title_line1') || t('hero_line1_default')}
               </span>
               <span className="block text-gold-500 drop-shadow-[0_0_15px_rgba(255,215,0,0.2)] relative z-10 mt-2 md:mt-4">
-                {getSetting('hero_title_line2') || "With Sniper Precision"}
+                {getSetting('hero_title_line2') || t('hero_line2_default')}
               </span>
             </h1>
             
             <p className="text-gray-400 text-lg md:text-xl mb-10 max-w-3xl mx-auto leading-relaxed opacity-80 font-light">
-              {getSetting('hero_desc')}
+              {getSetting('hero_desc') || t('hero_desc_default')}
             </p>
             
             <div className="flex flex-col sm:flex-row justify-center gap-5 mb-12">
@@ -138,7 +148,7 @@ export const Home: React.FC = () => {
         )}
       </section>
 
-      {/* ================= FEATURED COURSES ================= */}
+      {/* ================= FEATURED COURSES (NOW VISIBLE TO VISITORS) ================= */}
       <section className="relative z-10 section-padding border-t border-white/5 bg-[#010205]">
         <div className="container-custom">
           <div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-4">
@@ -233,6 +243,7 @@ export const Home: React.FC = () => {
       </section>
 
       {/* ================= MASTER CLASS PRO (COMING SOON) ================= */}
+      {/* يظهر فقط للمستخدمين المسجلين (user موجود) */}
       {showComingSoon && (
         <section className="relative z-10 py-20">
           <div className="container-custom">
@@ -248,25 +259,25 @@ export const Home: React.FC = () => {
                 <div className={`flex-1 text-center ${dir === 'rtl' ? 'md:text-right' : 'md:text-left'}`}>
                   <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gold-500/5 border border-gold-500/10 text-gold-500 text-xs font-bold uppercase tracking-widest mb-6 animate-fade-in">
                     <Sparkles size={14} />
-                    {getContent('coming_soon_badge') || "Coming Soon"}
+                    {getContent('coming_soon_badge') || t('coming_soon_badge_default')}
                   </div>
                   
                   <h2 className="text-4xl md:text-6xl font-black text-white mb-4 tracking-tight">
-                    {getContent('coming_soon_title') || "Master Class Pro"}
+                    {getContent('coming_soon_title') || t('coming_soon_title_default')}
                   </h2>
                   
                   <p className="text-xl text-gray-500 max-w-2xl leading-relaxed mb-8">
-                    {getContent('coming_soon_desc') || "Advanced professional course revealing market maker secrets."}
+                    {getContent('coming_soon_desc') || t('coming_soon_desc_default')}
                   </p>
 
                   <div className={`flex flex-wrap justify-center ${dir === 'rtl' ? 'md:justify-start' : 'md:justify-start'} gap-4`}>
                     <div className="px-6 py-3 bg-[#020204] rounded-xl border border-white/5 flex items-center gap-3 text-gray-400">
                        <Lock size={18} className="text-gold-500/40" />
-                       <span className="text-sm font-bold">{getContent('coming_soon_feature_1') || "Exclusive Content"}</span>
+                       <span className="text-sm font-bold">{getContent('coming_soon_feature_1') || (language === 'ar' ? "محتوى حصري" : "Exclusive Content")}</span>
                     </div>
                     <div className="px-6 py-3 bg-[#020204] rounded-xl border border-white/5 flex items-center gap-3 text-gray-400">
                        <Target size={18} className="text-gold-500/40" />
-                       <span className="text-sm font-bold">{getContent('coming_soon_feature_2') || "Advanced Strategies"}</span>
+                       <span className="text-sm font-bold">{getContent('coming_soon_feature_2') || (language === 'ar' ? "استراتيجيات متقدمة" : "Advanced Strategies")}</span>
                     </div>
                   </div>
                 </div>
@@ -292,8 +303,8 @@ export const Home: React.FC = () => {
 
           <div className="container-custom relative">
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{getContent('why_choose_us_title') || "Why Choose Us?"}</h2>
-              <p className="text-gray-500 max-w-2xl mx-auto text-lg">{getContent('why_choose_us_desc') || "We provide a complete educational experience."}</p>
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">{getContent('why_choose_us_title') || t('why_choose_us_title_default')}</h2>
+              <p className="text-gray-500 max-w-2xl mx-auto text-lg">{getContent('why_choose_us_desc') || t('why_choose_us_desc_default')}</p>
             </div>
             
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -338,10 +349,10 @@ export const Home: React.FC = () => {
 
               <div className="relative z-10 p-12 md:p-20 text-center">
                 <h2 className="text-4xl md:text-5xl font-black text-navy-950 mb-6 drop-shadow-sm">
-                  {getContent('cta_title') || "Ready to Start?"}
+                  {getContent('cta_title') || t('cta_title_default')}
                 </h2>
                 <p className="text-navy-900 font-bold text-xl md:text-2xl mb-12 leading-relaxed max-w-3xl mx-auto opacity-90">
-                  {getContent('cta_desc') || "Join Sniper FX Gold community now."}
+                  {getContent('cta_desc') || t('cta_desc_default')}
                 </p>
                 
                 <Link 
@@ -366,7 +377,7 @@ export const Home: React.FC = () => {
               {getContent('footer_tagline') || t('platform_tagline')}
             </h3>
             <p className="text-gray-600 text-sm mb-8 font-medium tracking-wider uppercase">
-              {getContent('footer_sub_tagline') || "Real Education. Real Results."}
+              {getContent('footer_sub_tagline') || (language === 'ar' ? "تعليم حقيقي. نتائج حقيقية." : "Real Education. Real Results.")}
             </p>
             <h4 className="text-white font-bold text-lg mb-6">
               {t('contact')}

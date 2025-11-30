@@ -25,8 +25,8 @@ export const Contact: React.FC = () => {
       bg: 'bg-[#1877F2]/10',
       border: 'border-[#1877F2]/20',
       link: siteSettings.social_links.facebook,
-      actionText: getContent('fb_card_btn') || 'Follow on Facebook',
-      subText: getContent('fb_card_sub') || 'Latest News',
+      actionText: getContent('fb_card_btn') || (language === 'ar' ? "تابعنا على فيسبوك" : "Follow on Facebook"),
+      subText: getContent('fb_card_sub') || (language === 'ar' ? "آخر الأخبار" : "Latest News"),
       visible: features.social_facebook_visible !== false
     },
     {
@@ -37,8 +37,8 @@ export const Contact: React.FC = () => {
       bg: 'bg-[#E4405F]/10',
       border: 'border-[#E4405F]/20',
       link: siteSettings.social_links.instagram,
-      actionText: getContent('insta_card_btn') || 'Follow on Instagram',
-      subText: getContent('insta_card_sub') || 'Daily Stories',
+      actionText: getContent('insta_card_btn') || (language === 'ar' ? "تابعنا على انستجرام" : "Follow on Instagram"),
+      subText: getContent('insta_card_sub') || (language === 'ar' ? "يوميات وتحديثات" : "Daily Stories"),
       visible: features.social_instagram_visible !== false
     },
     {
@@ -49,8 +49,8 @@ export const Contact: React.FC = () => {
       bg: 'bg-[#229ED9]/10',
       border: 'border-[#229ED9]/20',
       link: siteSettings.social_links.telegram,
-      actionText: getContent('tg_card_btn') || 'Join Channel',
-      subText: getContent('tg_card_sub') || 'Live Signals',
+      actionText: getContent('tg_card_btn') || (language === 'ar' ? "انضم للقناة" : "Join Channel"),
+      subText: getContent('tg_card_sub') || (language === 'ar' ? "توصيات مباشرة" : "Live Signals"),
       visible: features.social_telegram_visible !== false
     },
     {
@@ -61,8 +61,8 @@ export const Contact: React.FC = () => {
       bg: 'bg-[#FF0000]/10',
       border: 'border-[#FF0000]/20',
       link: siteSettings.social_links.youtube,
-      actionText: getContent('yt_card_btn') || 'Subscribe',
-      subText: getContent('yt_card_sub') || 'Video Tutorials',
+      actionText: getContent('yt_card_btn') || (language === 'ar' ? "اشترك الآن" : "Subscribe"),
+      subText: getContent('yt_card_sub') || (language === 'ar' ? "شروحات فيديو" : "Video Tutorials"),
       visible: features.social_youtube_visible !== false
     },
     {
@@ -73,8 +73,8 @@ export const Contact: React.FC = () => {
       bg: 'bg-[#FE2C55]/10',
       border: 'border-[#FE2C55]/20',
       link: siteSettings.social_links.tiktok,
-      actionText: getContent('tt_card_btn') || 'Follow',
-      subText: getContent('tt_card_sub') || 'Short Clips',
+      actionText: getContent('tt_card_btn') || (language === 'ar' ? "تابعنا" : "Follow"),
+      subText: getContent('tt_card_sub') || (language === 'ar' ? "مقاطع قصيرة" : "Short Clips"),
       visible: features.social_tiktok_visible !== false
     },
     {
@@ -85,8 +85,8 @@ export const Contact: React.FC = () => {
       bg: 'bg-[#25D366]/10',
       border: 'border-[#25D366]/20',
       link: siteSettings.social_links.whatsapp,
-      actionText: getContent('wa_card_btn') || 'Message Us',
-      subText: getContent('wa_card_sub') || 'Direct Contact',
+      actionText: getContent('wa_card_btn') || (language === 'ar' ? "راسلنا" : "Message Us"),
+      subText: getContent('wa_card_sub') || (language === 'ar' ? "تواصل مباشر" : "Direct Contact"),
       visible: features.social_whatsapp_visible !== false
     }
   ];
@@ -96,10 +96,10 @@ export const Contact: React.FC = () => {
       <div className="container-custom">
         <div className="text-center max-w-3xl mx-auto mb-20 animate-fade-in pt-10">
           <h1 className="text-5xl font-black text-white mb-6">
-            {getContent('contact_main_title') || t('contact')}
+            {getContent('contact_main_title') || t('contact_main_title_default')}
           </h1>
           <p className="text-gray-400 text-lg">
-            {getContent('contact_main_desc') || "Our support team is ready to answer your queries"}
+            {getContent('contact_main_desc') || t('contact_main_desc_default')}
           </p>
         </div>
 

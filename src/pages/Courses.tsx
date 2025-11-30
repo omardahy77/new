@@ -20,7 +20,8 @@ export const Courses: React.FC = () => {
 
   const handleCourseClick = (courseId: string) => {
     if (!user) {
-      navigate('/register');
+      // Changed to Login as requested for better UX
+      navigate('/login');
     } else {
       navigate(`/course/${courseId}`);
     }
@@ -128,7 +129,7 @@ export const Courses: React.FC = () => {
                             {hasAccess ? <Play size={18} fill="currentColor" /> : <Lock size={18} />}
                         </div>
                         <span className={`text-sm font-bold ${hasAccess ? 'text-white' : 'text-gray-500'}`}>
-                            {hasAccess ? t('watch_now') : t('locked_content')}
+                            {hasAccess ? t('watch_now') : t('login_to_access')}
                         </span>
                     </div>
 
@@ -155,10 +156,10 @@ export const Courses: React.FC = () => {
                   <div className="w-20 h-20 rounded-full bg-navy-900 border border-gold-500/20 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,215,0,0.05)] group-hover:scale-110 transition-transform duration-500 mx-auto">
                     <Lock className="text-gold-500/50 group-hover:text-gold-500 transition-colors" size={32} />
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">{getContent('coming_soon_title') || "Master Class Pro"}</h3>
-                  <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">{getContent('coming_soon_desc') || "Advanced professional course."}</p>
+                  <h3 className="text-2xl font-bold text-white mb-2">{getContent('coming_soon_title') || t('coming_soon_title_default')}</h3>
+                  <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">{getContent('coming_soon_desc') || t('coming_soon_desc_default')}</p>
                   <span className="px-4 py-1.5 bg-gold-500/5 border border-gold-500/10 rounded-lg text-xs text-gold-500/70 font-bold uppercase tracking-wider">
-                    {getContent('coming_soon_badge') || "Coming Soon"}
+                    {getContent('coming_soon_badge') || t('coming_soon_badge_default')}
                   </span>
                 </div>
               </div>

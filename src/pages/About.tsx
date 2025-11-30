@@ -17,9 +17,9 @@ export const About: React.FC = () => {
   };
 
   const stats = [
-    { icon: Users, label: getContent('stats_students_label') || "Active Students", value: siteSettings.stats.students || "+1500" },
-    { icon: Clock, label: getContent('stats_hours_label') || "Training Hours", value: siteSettings.stats.hours || "+50" },
-    { icon: Headphones, label: getContent('stats_support_label') || "Support", value: content.stats_support_value || "24/7" },
+    { icon: Users, label: getContent('stats_students_label') || (language === 'ar' ? "متدرب نشط" : "Active Students"), value: siteSettings.stats.students || "+1500" },
+    { icon: Clock, label: getContent('stats_hours_label') || (language === 'ar' ? "ساعة تدريبية" : "Training Hours"), value: siteSettings.stats.hours || "+50" },
+    { icon: Headphones, label: getContent('stats_support_label') || (language === 'ar' ? "دعم فني" : "Support"), value: content.stats_support_value || "24/7" },
   ];
 
   return (
@@ -35,10 +35,10 @@ export const About: React.FC = () => {
             <Logo />
           </div>
           <h1 className="text-4xl md:text-5xl font-black text-white mb-6">
-            {getContent('about_main_title') || t('about')}
+            {getContent('about_main_title') || t('about_main_title_default')}
           </h1>
           <p className="text-lg text-gray-300 leading-relaxed max-w-3xl mx-auto">
-            {getContent('about_main_desc') || "Not just an educational site, but a specialized academy."}
+            {getContent('about_main_desc') || t('about_main_desc_default')}
           </p>
         </div>
 
@@ -50,9 +50,9 @@ export const About: React.FC = () => {
             <div className="flex justify-center mb-6">
                <Award className="text-gold-500 w-12 h-12" strokeWidth={1.5} />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-4">{getContent('mission_title') || "Our Mission"}</h2>
+            <h2 className="text-3xl font-bold text-white mb-4">{getContent('mission_title') || t('mission_title_default')}</h2>
             <p className="text-gray-300 leading-relaxed text-lg">
-              {getContent('mission_desc') || "Providing high-quality educational content..."}
+              {getContent('mission_desc') || t('mission_desc_default')}
             </p>
           </div>
 
@@ -62,9 +62,9 @@ export const About: React.FC = () => {
             <div className="flex justify-center mb-6">
                <Target className="text-gold-500 w-12 h-12" strokeWidth={1.5} />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-4">{getContent('vision_title') || "Our Vision"}</h2>
+            <h2 className="text-3xl font-bold text-white mb-4">{getContent('vision_title') || t('vision_title_default')}</h2>
             <p className="text-gray-300 leading-relaxed text-lg">
-              {getContent('vision_desc') || "To be the #1 trusted reference for traders..."}
+              {getContent('vision_desc') || t('vision_desc_default')}
             </p>
           </div>
         </div>

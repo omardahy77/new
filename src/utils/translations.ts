@@ -18,7 +18,7 @@ export const translations = {
     loading: 'جاري التحميل...',
     maintenance_title: 'الموقع تحت الصيانة',
     maintenance_desc: 'نقوم حالياً بإجراء تحسينات هامة لتقديم تجربة تداول أفضل.',
-    rights_reserved: 'جميع الحقوق محفوظة',
+    rights_reserved: 'All Rights Reserved', // Keep English as requested
     
     // Home
     welcome_back: 'مرحباً بك،',
@@ -37,6 +37,26 @@ export const translations = {
     lessons: 'درس',
     watch_now: 'مشاهدة الآن',
     login_to_access: 'سجل للدخول',
+    
+    // Defaults (Fallbacks)
+    hero_line1_default: 'تداول بذكاء',
+    hero_line2_default: 'بدقة القناص',
+    hero_desc_default: 'اكتشف أسرار صناعة السوق والمؤسسات المالية... نظام تعليمي متكامل ومحمي يأخذك من الصفر إلى الاحتراف.',
+    why_choose_us_title_default: 'لماذا تختارنا؟',
+    why_choose_us_desc_default: 'نقدم تجربة تعليمية متكاملة تجمع بين النظرية والتطبيق.',
+    cta_title_default: 'جاهز للبدء؟',
+    cta_desc_default: 'انضم لمجتمع Sniper FX Gold الآن وابدأ رحلة النجاح.',
+    coming_soon_title_default: 'Master Class Pro',
+    coming_soon_desc_default: 'كورس احترافي متقدم يكشف أسرار صناع السوق.',
+    coming_soon_badge_default: 'قريباً',
+    about_main_title_default: 'من نحن',
+    about_main_desc_default: 'لسنا مجرد موقع تعليمي، بل أكاديمية متخصصة.',
+    mission_title_default: 'مهمتنا',
+    mission_desc_default: 'تقديم محتوى تعليمي عالي الجودة.',
+    vision_title_default: 'رؤيتنا',
+    vision_desc_default: 'أن نكون المرجع الأول للمتداولين العرب.',
+    contact_main_title_default: 'تواصل معنا',
+    contact_main_desc_default: 'فريق الدعم جاهز للإجابة على استفساراتكم.',
     
     // Courses
     start_watching: 'ابدأ المشاهدة',
@@ -90,24 +110,6 @@ export const translations = {
     enter: 'دخول',
     account_not_found: 'الحساب غير موجود أو تم حذفه.',
     
-    // Admin
-    admin_panel: 'لوحة التحكم الشاملة',
-    admin_desc: 'مركز القيادة والتحكم في المنصة',
-    save_changes: 'حفظ التغييرات',
-    add_course: 'إضافة كورس',
-    edit: 'تعديل',
-    delete: 'حذف',
-    users: 'الأعضاء',
-    requests: 'الطلبات',
-    settings: 'الإعدادات',
-    content: 'المحتوى',
-    lang_edit: 'لغة التعديل',
-    arabic: 'العربية',
-    english: 'English',
-    confirm_delete_user: 'هل أنت متأكد أنك تريد حذف هذا العضو نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
-    user_deleted: 'تم حذف العضو بنجاح',
-    delete_failed: 'فشل الحذف',
-    
     // Features
     feat_analysis: 'تحليل فني متقدم',
     feat_analysis_desc: 'تعلم استراتيجيات التحليل الفني التي تستخدمها البنوك الكبرى.',
@@ -155,6 +157,26 @@ export const translations = {
     watch_now: 'Watch Now',
     login_to_access: 'Login to Access',
     
+    // Defaults
+    hero_line1_default: 'Trade Smart',
+    hero_line2_default: 'With Sniper Precision',
+    hero_desc_default: 'Discover the secrets of market making... A complete, secure LMS taking you from zero to hero.',
+    why_choose_us_title_default: 'Why Choose Us?',
+    why_choose_us_desc_default: 'We provide a complete educational experience.',
+    cta_title_default: 'Ready to Start?',
+    cta_desc_default: 'Join Sniper FX Gold community now.',
+    coming_soon_title_default: 'Master Class Pro',
+    coming_soon_desc_default: 'Advanced professional course revealing market maker secrets.',
+    coming_soon_badge_default: 'Coming Soon',
+    about_main_title_default: 'About Us',
+    about_main_desc_default: 'Not just an educational site, but a specialized academy.',
+    mission_title_default: 'Our Mission',
+    mission_desc_default: 'Providing high-quality educational content.',
+    vision_title_default: 'Our Vision',
+    vision_desc_default: 'To be the #1 trusted reference for traders.',
+    contact_main_title_default: 'Contact Us',
+    contact_main_desc_default: 'Our support team is ready to answer your queries.',
+
     // Courses
     start_watching: 'Start Watching',
     login_to_watch: 'Login to Watch',
@@ -207,24 +229,6 @@ export const translations = {
     enter: 'Enter',
     account_not_found: 'Account not found or has been deleted.',
     
-    // Admin
-    admin_panel: 'Admin Dashboard',
-    admin_desc: 'Platform Command Center',
-    save_changes: 'Save Changes',
-    add_course: 'Add Course',
-    edit: 'Edit',
-    delete: 'Delete',
-    users: 'Users',
-    requests: 'Requests',
-    settings: 'Settings',
-    content: 'Content',
-    lang_edit: 'Editing Language',
-    arabic: 'Arabic',
-    english: 'English',
-    confirm_delete_user: 'Are you sure you want to permanently delete this user? This cannot be undone.',
-    user_deleted: 'User deleted successfully',
-    delete_failed: 'Delete failed',
-
     // Features
     feat_analysis: 'Advanced Technical Analysis',
     feat_analysis_desc: 'Learn technical analysis strategies used by major banks.',
