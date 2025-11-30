@@ -6,7 +6,7 @@ import { formatDuration } from '../utils/videoHelpers';
 import { 
   ArrowRight, Star, Play, Lock, Crown, 
   LineChart, Shield, Brain, Users, ArrowLeft,
-  Facebook, Instagram, Send, CheckCircle2, UserPlus, LogIn, Target, LayoutDashboard, Sparkles, Video, Phone, Youtube, Clock, BookOpen
+  Facebook, Instagram, Send, CheckCircle2, UserPlus, LogIn, Target, LayoutDashboard, Sparkles, Video, Phone, Youtube, Clock, BookOpen, GraduationCap
 } from 'lucide-react';
 import { Logo } from '../components/Logo';
 
@@ -16,8 +16,25 @@ const getIcon = (name: string) => {
   return <Icon size={32} className="text-gold-500" />;
 };
 
+// Skeleton Component for Courses
+const CourseSkeleton = () => (
+  <div className="glass-card h-full flex flex-col overflow-hidden bg-[#080b14]/60 animate-pulse">
+    <div className="h-60 bg-navy-800/50 w-full"></div>
+    <div className="p-7 flex-1 flex flex-col space-y-4">
+       <div className="h-4 bg-navy-800/50 rounded w-1/4"></div>
+       <div className="h-6 bg-navy-800/50 rounded w-3/4"></div>
+       <div className="h-4 bg-navy-800/50 rounded w-full"></div>
+       <div className="h-4 bg-navy-800/50 rounded w-2/3"></div>
+       <div className="mt-auto pt-6 flex justify-between">
+          <div className="h-4 bg-navy-800/50 rounded w-1/3"></div>
+          <div className="h-8 w-8 bg-navy-800/50 rounded-full"></div>
+       </div>
+    </div>
+  </div>
+);
+
 export const Home: React.FC = () => {
-  const { user, courses, siteSettings, checkAccess } = useStore();
+  const { user, courses, siteSettings, checkAccess, coursesLoading, enrollments } = useStore();
   const { t, language, dir } = useLanguage();
   const navigate = useNavigate();
   const links = siteSettings.social_links || {};
@@ -38,19 +55,15 @@ export const Home: React.FC = () => {
     return (siteSettings as any)[key] || '';
   };
 
-  // Logic for displaying courses to visitors (Free courses only)
-  // للزوار: نعرض الكورسات المجانية فقط. للمسجلين: نعرض كل الكورسات.
   const availableCourses = user ? courses : courses.filter(c => !c.is_paid);
-  
-  // نأخذ أول 3 كورسات للعرض في الرئيسية
   const featuredCourses = availableCourses.slice(0, 3);
-  
-  // المنطق الجديد: قسم "قريباً" يظهر فقط إذا كان المستخدم مسجلاً (user موجود) والميزة مفعلة
   const showComingSoon = user && features.show_coming_soon;
+
+  // Filter courses for "My Learning" section
+  const myCourses = user ? courses.filter(c => checkAccess(c)) : [];
 
   const handleCourseClick = (courseId: string) => {
     if (!user) {
-        // إذا لم يكن مسجلاً، نوجهه لصفحة التسجيل (أو الدخول)
         navigate('/login'); 
     } else {
         navigate(`/course/${courseId}`);
@@ -69,35 +82,38 @@ export const Home: React.FC = () => {
       {/* ================= HERO SECTION ================= */}
       <section className="relative z-10 pt-[160px] pb-24 container-custom text-center">
         {user ? (
-          <div className="max-w-3xl mx-auto animate-fade-in">
+          <div className="max-w-4xl mx-auto animate-fade-in">
             <div className="glass-card p-10 md:p-14 border-gold-500/20 shadow-[0_0_60px_rgba(0,0,0,0.5)] relative overflow-hidden group bg-[#080b14]/80">
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-gold-500/50 to-transparent opacity-50"></div>
               
-              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 mx-auto mb-6 flex items-center justify-center text-navy-950 text-4xl font-bold shadow-lg ring-4 ring-navy-950">
-                {user.email.charAt(0).toUpperCase()}
-              </div>
-              <h1 className="text-3xl md:text-4xl font-bold mb-3">
-                {t('welcome_back')} <span className="text-gold-500">{user.email.split('@')[0]}</span>
-              </h1>
-              <p className="text-gray-400 mb-8">{t('continue_journey')}</p>
-              
-              <div className="flex justify-center gap-3 mb-8">
-                <span className={`px-4 py-1.5 rounded-full text-sm font-bold border flex items-center gap-2 ${user.status === 'active' ? 'bg-green-900/20 text-green-400 border-green-500/10' : 'bg-yellow-900/20 text-yellow-400 border-yellow-500/10'}`}>
-                  {user.status === 'active' ? <CheckCircle2 size={14} /> : null}
-                  {user.status === 'active' ? t('active_member') : t('pending_member')}
-                </span>
-                {user.role === 'admin' && <span className="px-4 py-1.5 rounded-full text-sm font-bold bg-gold-500/10 text-gold-400 border border-gold-500/10">Admin</span>}
-              </div>
-              
-              <div className="flex flex-col sm:flex-row justify-center gap-4">
-                <Link to="/courses" className="btn-gold px-12 py-4 text-lg inline-flex items-center justify-center gap-3 shadow-xl shadow-gold-500/10 hover:shadow-gold-500/30 transition-shadow">
-                  <Play size={22} fill="currentColor" /> {t('start_learning')}
-                </Link>
-                {user.role === 'admin' && (
-                  <Link to="/admin" className="btn-glass px-8 py-4 text-lg font-bold inline-flex items-center justify-center gap-3 hover:bg-white/5">
-                    <LayoutDashboard size={22} /> {t('control_panel')}
-                  </Link>
-                )}
+              <div className="flex flex-col md:flex-row items-center gap-8 text-center md:text-right rtl:md:text-right ltr:md:text-left">
+                  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-950 text-4xl font-bold shadow-lg ring-4 ring-navy-950 shrink-0">
+                    {user.email.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                      <h1 className="text-3xl md:text-4xl font-bold mb-2">
+                        {t('welcome_back')} <span className="text-gold-500">{user.full_name || user.email.split('@')[0]}</span>
+                      </h1>
+                      <p className="text-gray-400 mb-4">{t('continue_journey')}</p>
+                      
+                      <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                        <span className={`px-4 py-1.5 rounded-full text-sm font-bold border flex items-center gap-2 ${user.status === 'active' ? 'bg-green-900/20 text-green-400 border-green-500/10' : 'bg-yellow-900/20 text-yellow-400 border-yellow-500/10'}`}>
+                          {user.status === 'active' ? <CheckCircle2 size={14} /> : null}
+                          {user.status === 'active' ? t('active_member') : t('pending_member')}
+                        </span>
+                        {user.role === 'admin' && <span className="px-4 py-1.5 rounded-full text-sm font-bold bg-gold-500/10 text-gold-400 border border-gold-500/10">Admin</span>}
+                      </div>
+                  </div>
+                  <div className="flex flex-col gap-3 w-full md:w-auto">
+                    <Link to="/courses" className="btn-gold px-8 py-3 text-base inline-flex items-center justify-center gap-2 shadow-xl shadow-gold-500/10 hover:shadow-gold-500/30 transition-shadow whitespace-nowrap">
+                      <Play size={18} fill="currentColor" /> {t('start_learning')}
+                    </Link>
+                    {user.role === 'admin' && (
+                      <Link to="/admin" className="btn-glass px-8 py-3 text-base font-bold inline-flex items-center justify-center gap-2 hover:bg-white/5 whitespace-nowrap">
+                        <LayoutDashboard size={18} /> {t('control_panel')}
+                      </Link>
+                    )}
+                  </div>
               </div>
             </div>
           </div>
@@ -148,7 +164,57 @@ export const Home: React.FC = () => {
         )}
       </section>
 
-      {/* ================= FEATURED COURSES (NOW VISIBLE TO VISITORS) ================= */}
+      {/* ================= MY LEARNING (Logged In Only) ================= */}
+      {user && (
+        <section className="relative z-10 pb-20">
+           <div className="container-custom">
+              <div className="flex items-center gap-3 mb-8">
+                  <GraduationCap className="text-gold-500" size={28} />
+                  <h2 className="text-2xl font-bold text-white">{language === 'ar' ? 'دوراتي التعليمية' : 'My Learning'}</h2>
+              </div>
+              
+              {myCourses.length > 0 ? (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {myCourses.map((course) => (
+                          <div key={course.id} onClick={() => handleCourseClick(course.id)} className="glass-card p-4 flex items-center gap-4 cursor-pointer hover:bg-white/5 transition-colors group">
+                              <div className="w-20 h-20 rounded-lg bg-black overflow-hidden shrink-0 border border-white/10 group-hover:border-gold-500/30">
+                                  {course.thumbnail ? (
+                                      <img src={course.thumbnail} className="w-full h-full object-cover" alt={course.title} />
+                                  ) : (
+                                      <div className="w-full h-full flex items-center justify-center"><Play size={24} className="text-gray-600" /></div>
+                                  )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-white truncate mb-1 group-hover:text-gold-400 transition-colors">{course.title}</h3>
+                                  <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                      <Clock size={12} /> <span>{formatDuration(course.duration, language)}</span>
+                                      <span className="w-1 h-1 bg-gray-600 rounded-full"></span>
+                                      <BookOpen size={12} /> <span>{course.lesson_count || 0} {t('lessons')}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs font-bold text-gold-500">
+                                      <Play size={12} fill="currentColor" /> {t('watch_now')}
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              ) : (
+                  <div className="glass-card p-10 text-center border-dashed border-gold-500/20">
+                      <div className="w-16 h-16 bg-navy-900 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-500">
+                          <BookOpen size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-white mb-2">{language === 'ar' ? 'لست مشتركاً في أي كورس بعد' : 'Not enrolled in any courses yet'}</h3>
+                      <p className="text-gray-400 mb-6">{language === 'ar' ? 'تصفح الكورسات وابدأ رحلتك التعليمية الآن.' : 'Browse courses and start your learning journey now.'}</p>
+                      <Link to="/courses" className="btn-gold px-6 py-2 inline-flex items-center gap-2 text-sm">
+                          {t('view_all_courses')} <ArrowRight size={16} />
+                      </Link>
+                  </div>
+              )}
+           </div>
+        </section>
+      )}
+
+      {/* ================= FEATURED COURSES ================= */}
       <section className="relative z-10 section-padding border-t border-white/5 bg-[#010205]">
         <div className="container-custom">
           <div className="flex flex-col md:flex-row items-end justify-between mb-16 gap-4">
@@ -165,85 +231,91 @@ export const Home: React.FC = () => {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {featuredCourses.length === 0 && (
+            {coursesLoading ? (
+               // Show Skeletons while loading
+               <>
+                 <CourseSkeleton />
+                 <CourseSkeleton />
+                 <CourseSkeleton />
+               </>
+            ) : featuredCourses.length === 0 ? (
                <div className="col-span-full text-center text-gray-600">{t('no_featured_courses')}</div>
-            )}
-
-            {featuredCourses.map((course, idx) => {
-              const hasAccess = checkAccess(course);
-              return (
-                <div key={course.id} onClick={() => handleCourseClick(course.id)} className="group cursor-pointer h-full">
-                  <div className="glass-card h-full flex flex-col overflow-hidden hover:border-gold-500/30 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-all duration-500 relative bg-[#080b14]/60">
-                    {/* Image Container */}
-                    <div className="relative h-60 bg-[#05070E] overflow-hidden">
-                      {course.thumbnail ? (
-                        <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-[#05070E]"><Play size={40} className="text-gray-700" /></div>
-                      )}
-                      
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#080b14] via-[#080b14]/40 to-transparent"></div>
-                      
-                      <div className={`absolute top-4 z-10 flex flex-col gap-2 ${dir === 'rtl' ? 'right-4' : 'left-4'}`}>
-                        {course.is_paid ? (
-                          <span className="bg-black/80 backdrop-blur-md text-gold-500 px-3 py-1.5 rounded-lg text-xs font-bold border border-gold-500/20 flex items-center gap-1 shadow-lg">
-                            <Crown size={12} fill="currentColor" /> {t('premium')}
-                          </span>
+            ) : (
+                featuredCourses.map((course, idx) => {
+                const hasAccess = checkAccess(course);
+                return (
+                    <div key={course.id} onClick={() => handleCourseClick(course.id)} className="group cursor-pointer h-full">
+                    <div className="glass-card h-full flex flex-col overflow-hidden hover:border-gold-500/30 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] transition-all duration-500 relative bg-[#080b14]/60">
+                        {/* Image Container */}
+                        <div className="relative h-60 bg-[#05070E] overflow-hidden">
+                        {course.thumbnail ? (
+                            <img src={course.thumbnail} alt={course.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-80 group-hover:opacity-100" />
                         ) : (
-                          <span className="bg-green-900/80 backdrop-blur-md text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg border border-green-500/20">{t('free')}</span>
+                            <div className="w-full h-full flex items-center justify-center bg-[#05070E]"><Play size={40} className="text-gray-700" /></div>
                         )}
-                      </div>
-
-                      {!hasAccess && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <div className="w-14 h-14 rounded-full bg-black border border-gold-500/40 flex items-center justify-center text-gold-500 shadow-[0_0_20px_rgba(255,215,0,0.1)] scale-0 group-hover:scale-100 transition-transform duration-300">
-                            <Lock size={24} />
-                          </div>
+                        
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#080b14] via-[#080b14]/40 to-transparent"></div>
+                        
+                        <div className={`absolute top-4 z-10 flex flex-col gap-2 ${dir === 'rtl' ? 'right-4' : 'left-4'}`}>
+                            {course.is_paid ? (
+                            <span className="bg-black/80 backdrop-blur-md text-gold-500 px-3 py-1.5 rounded-lg text-xs font-bold border border-gold-500/20 flex items-center gap-1 shadow-lg">
+                                <Crown size={12} fill="currentColor" /> {t('premium')}
+                            </span>
+                            ) : (
+                            <span className="bg-green-900/80 backdrop-blur-md text-green-400 px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg border border-green-500/20">{t('free')}</span>
+                            )}
                         </div>
-                      )}
-                    </div>
 
-                    <div className="p-7 flex-1 flex flex-col">
-                      <div className="flex items-center gap-1 mb-3">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} size={14} className={i < Math.floor(course.rating) ? "text-gold-500 fill-gold-500" : "text-gray-800"} />
-                        ))}
-                        <span className={`text-xs text-gray-600 font-mono ${dir === 'rtl' ? 'mr-2' : 'ml-2'}`}>({course.rating})</span>
-                      </div>
-                      
-                      <h3 className="text-xl font-bold text-white mb-3 group-hover:text-gold-400 transition-colors line-clamp-1">{course.title}</h3>
-                      <p className="text-gray-500 text-sm line-clamp-2 mb-6 leading-relaxed">{course.description}</p>
-                      
-                      <div className="flex items-center gap-6 text-xs text-gray-500 font-bold mb-6">
-                         <div className="flex items-center gap-1.5">
-                            <Clock size={14} className="text-gold-500" />
-                            <span>{formatDuration(course.duration, language)}</span>
-                         </div>
-                         <div className="flex items-center gap-1.5">
-                            <BookOpen size={14} className="text-gold-500" />
-                            <span>{course.lesson_count || 0} {t('lessons')}</span>
-                         </div>
-                      </div>
-
-                      <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
-                        <span className={`text-sm font-bold transition-colors ${hasAccess ? 'text-gold-500 group-hover:text-gold-400' : 'text-gray-600'}`}>
-                          {hasAccess ? t('watch_now') : t('login_to_access')}
-                        </span>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${hasAccess ? 'border-gold-500 text-gold-500' : 'border-gray-700 text-gray-700'}`}>
-                            {hasAccess ? <Play size={12} fill="currentColor" /> : <Lock size={12} />}
+                        {!hasAccess && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <div className="w-14 h-14 rounded-full bg-black border border-gold-500/40 flex items-center justify-center text-gold-500 shadow-[0_0_20px_rgba(255,215,0,0.1)] scale-0 group-hover:scale-100 transition-transform duration-300">
+                                <Lock size={24} />
+                            </div>
+                            </div>
+                        )}
                         </div>
-                      </div>
+
+                        <div className="p-7 flex-1 flex flex-col">
+                        <div className="flex items-center gap-1 mb-3">
+                            {[...Array(5)].map((_, i) => (
+                            <Star key={i} size={14} className={i < Math.floor(course.rating) ? "text-gold-500 fill-gold-500" : "text-gray-800"} />
+                            ))}
+                            <span className={`text-xs text-gray-600 font-mono ${dir === 'rtl' ? 'mr-2' : 'ml-2'}`}>({course.rating})</span>
+                        </div>
+                        
+                        <h3 className="text-xl font-bold text-white mb-3 group-hover:text-gold-400 transition-colors line-clamp-1">{course.title}</h3>
+                        <p className="text-gray-500 text-sm line-clamp-2 mb-6 leading-relaxed">{course.description}</p>
+                        
+                        <div className="flex items-center gap-6 text-xs text-gray-500 font-bold mb-6">
+                            <div className="flex items-center gap-1.5">
+                                <Clock size={14} className="text-gold-500" />
+                                <span>{formatDuration(course.duration, language)}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <BookOpen size={14} className="text-gold-500" />
+                                <span>{course.lesson_count || 0} {t('lessons')}</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
+                            <span className={`text-sm font-bold transition-colors ${hasAccess ? 'text-gold-500 group-hover:text-gold-400' : 'text-gray-600'}`}>
+                            {hasAccess ? t('watch_now') : t('login_to_access')}
+                            </span>
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${hasAccess ? 'border-gold-500 text-gold-500' : 'border-gray-700 text-gray-700'}`}>
+                                {hasAccess ? <Play size={12} fill="currentColor" /> : <Lock size={12} />}
+                            </div>
+                        </div>
+                        </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                    </div>
+                );
+                })
+            )}
           </div>
         </div>
       </section>
 
-      {/* ================= MASTER CLASS PRO (COMING SOON) ================= */}
-      {/* يظهر فقط للمستخدمين المسجلين (user موجود) */}
+      {/* ================= MASTER CLASS PRO ================= */}
       {showComingSoon && (
         <section className="relative z-10 py-20">
           <div className="container-custom">

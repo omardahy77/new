@@ -2,8 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types';
 import { StoreContext } from './StoreContext';
+import { translations } from '../utils/translations';
 
-// Default Settings
+// Default Settings with FULL Content Config populated
 const defaultSettings: SiteSettings = {
   site_name: "Sniper FX Gold",
   site_name_en: "Sniper FX Gold",
@@ -24,6 +25,7 @@ const defaultSettings: SiteSettings = {
     youtube: "",
     facebook: "https://facebook.com",
     tiktok: "",
+    twitter: "",
     whatsapp: ""
   },
   home_features: [
@@ -41,15 +43,63 @@ const defaultSettings: SiteSettings = {
     social_telegram_visible: true,
     social_youtube_visible: true,
     social_tiktok_visible: true,
+    social_twitter_visible: true,
     social_whatsapp_visible: true
   },
+  // Pre-fill content config with defaults so inputs are not empty
   content_config: {
-    hero_title_line1: "تداول بذكاء",
-    hero_title_line1_en: "Trade Smart",
-    hero_title_line2: "بدقة القناص",
-    hero_title_line2_en: "With Sniper Precision",
-    hero_desc: "اكتشف أسرار صناعة السوق والمؤسسات المالية... نظام تعليمي متكامل ومحمي يأخذك من الصفر إلى الاحتراف.",
-    hero_desc_en: "Discover the secrets of market making... A complete, secure LMS taking you from zero to hero."
+    hero_title_line1: translations.ar.hero_line1_default,
+    hero_title_line1_en: translations.en.hero_line1_default,
+    hero_title_line2: translations.ar.hero_line2_default,
+    hero_title_line2_en: translations.en.hero_line2_default,
+    hero_desc: translations.ar.hero_desc_default,
+    hero_desc_en: translations.en.hero_desc_default,
+    
+    why_choose_us_title: translations.ar.why_choose_us_title_default,
+    why_choose_us_title_en: translations.en.why_choose_us_title_default,
+    why_choose_us_desc: translations.ar.why_choose_us_desc_default,
+    why_choose_us_desc_en: translations.en.why_choose_us_desc_default,
+    
+    cta_title: translations.ar.cta_title_default,
+    cta_title_en: translations.en.cta_title_default,
+    cta_desc: translations.ar.cta_desc_default,
+    cta_desc_en: translations.en.cta_desc_default,
+    
+    coming_soon_title: translations.ar.coming_soon_title_default,
+    coming_soon_title_en: translations.en.coming_soon_title_default,
+    coming_soon_desc: translations.ar.coming_soon_desc_default,
+    coming_soon_desc_en: translations.en.coming_soon_desc_default,
+    coming_soon_badge: translations.ar.coming_soon_badge_default,
+    coming_soon_badge_en: translations.en.coming_soon_badge_default,
+    coming_soon_feature_1: "محتوى حصري",
+    coming_soon_feature_1_en: "Exclusive Content",
+    coming_soon_feature_2: "استراتيجيات متقدمة",
+    coming_soon_feature_2_en: "Advanced Strategies",
+
+    about_main_title: translations.ar.about_main_title_default,
+    about_main_title_en: translations.en.about_main_title_default,
+    about_main_desc: translations.ar.about_main_desc_default,
+    about_main_desc_en: translations.en.about_main_desc_default,
+    
+    mission_title: translations.ar.mission_title_default,
+    mission_title_en: translations.en.mission_title_default,
+    mission_desc: translations.ar.mission_desc_default,
+    mission_desc_en: translations.en.mission_desc_default,
+    
+    vision_title: translations.ar.vision_title_default,
+    vision_title_en: translations.en.vision_title_default,
+    vision_desc: translations.ar.vision_desc_default,
+    vision_desc_en: translations.en.vision_desc_default,
+    
+    contact_main_title: translations.ar.contact_main_title_default,
+    contact_main_title_en: translations.en.contact_main_title_default,
+    contact_main_desc: translations.ar.contact_main_desc_default,
+    contact_main_desc_en: translations.en.contact_main_desc_default,
+    
+    footer_tagline: translations.ar.platform_tagline,
+    footer_tagline_en: translations.en.platform_tagline,
+    footer_sub_tagline: "تعليم حقيقي. نتائج حقيقية.",
+    footer_sub_tagline_en: "Real Education. Real Results."
   }
 };
 
@@ -59,49 +109,62 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const [coursesLoading, setCoursesLoading] = useState(true);
 
-  const fetchProfile = async (userId: string) => {
+  // Optimized Fetch Profile
+  const fetchProfile = async (userId: string, userEmail?: string) => {
+    if (userEmail === 'admin@sniperfx.com') {
+        const adminUser = {
+            id: userId,
+            email: userEmail,
+            role: 'admin',
+            status: 'active',
+            full_name: 'System Admin'
+        } as User;
+        setUser(adminUser);
+        setLoading(false);
+        return adminUser;
+    }
+
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      const isMasterAdmin = authUser?.email === 'admin@sniperfx.com';
-
       let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
       
-      // Fallback for master admin if profile is missing or incorrect
-      if (isMasterAdmin) {
-          if (!data) {
-              data = { id: userId, email: 'admin@sniperfx.com', role: 'admin', status: 'active', full_name: 'System Admin' };
-          } else {
-              // Enforce admin role for master email in memory
-              if (data.role !== 'admin' || data.status !== 'active') {
-                  data.role = 'admin';
-                  data.status = 'active';
-              }
-          }
-      }
-
       if (data) {
         setUser(data as User);
-        // Fetch enrollments in parallel or after
-        const { data: enrollData } = await supabase.from('enrollments').select('*').eq('user_id', userId);
-        if (enrollData) setEnrollments(enrollData as Enrollment[]);
+        supabase.from('enrollments').select('*').eq('user_id', userId).then(({ data: enrollData }) => {
+            if (enrollData) setEnrollments(enrollData as Enrollment[]);
+        });
+        return data as User;
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
       setUser(null);
     }
+    return null;
+  };
+
+  const login = async (email: string, password: string): Promise<User | null> => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    if (data.user) {
+        return await fetchProfile(data.user.id, data.user.email);
+    }
+    return null;
   };
 
   const fetchCourses = async () => {
+    setCoursesLoading(true);
     try {
       const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
       if (!error && data) setCourses(data as Course[]);
     } catch (e) {
       console.error("Courses fetch error:", e);
+    } finally {
+      setCoursesLoading(false);
     }
   };
 
@@ -114,15 +177,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .limit(1)
         .maybeSingle();
       
-      if (!data) {
-        setSiteSettings(defaultSettings);
-      } else {
+      if (data) {
         setSiteSettings({
           ...defaultSettings,
           ...data,
           social_links: { ...defaultSettings.social_links, ...(data.social_links || {}) },
           stats: { ...defaultSettings.stats, ...(data.stats || {}) },
           features_config: { ...defaultSettings.features_config, ...(data.features_config || {}) },
+          // Merge content config carefully to preserve defaults if keys are missing in DB
           content_config: { ...defaultSettings.content_config, ...(data.content_config || {}) },
           home_features: data.home_features || defaultSettings.home_features
         });
@@ -159,39 +221,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
     try {
-        const { data: existing } = await supabase
-            .from('site_settings')
-            .select('id')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-        
-        const targetId = existing?.id;
-        const mergedSettings = { ...siteSettings, ...newSettings };
-        
-        // Ensure content_config is never null/undefined to prevent DB errors
-        const safeContentConfig = mergedSettings.content_config || defaultSettings.content_config || {};
+        let targetId = siteSettings.id;
 
-        const payload = {
-            site_name: mergedSettings.site_name,
-            site_name_en: mergedSettings.site_name_en,
-            logo_url: mergedSettings.logo_url,
-            maintenance_mode: mergedSettings.maintenance_mode,
-            social_links: mergedSettings.social_links,
-            stats: mergedSettings.stats,
-            home_features: mergedSettings.home_features,
-            features_config: mergedSettings.features_config,
-            content_config: safeContentConfig,
-            hero_title: mergedSettings.hero_title,
-            hero_desc: mergedSettings.hero_desc
-        };
+        if (!targetId) {
+            const { data: existing } = await supabase
+                .from('site_settings')
+                .select('id')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            targetId = existing?.id;
+        }
         
+        const payload: any = { ...newSettings };
+        delete payload.id;
+        delete payload.created_at;
+
         let result;
 
         if (targetId) {
             result = await supabase.from('site_settings').update(payload).eq('id', targetId).select().single();
         } else {
-            result = await supabase.from('site_settings').insert([payload]).select().single();
+            const fullPayload = { ...defaultSettings, ...payload };
+            result = await supabase.from('site_settings').insert([fullPayload]).select().single();
         }
 
         if (result.error) throw result.error;
@@ -226,71 +278,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.auth.signOut();
   };
 
-  // --- INITIALIZATION LOGIC ---
   useEffect(() => {
     let mounted = true;
-
     const initializeApp = async () => {
-        // 1. Fetch Global Data
-        await Promise.all([fetchCourses(), fetchSettings()]);
-
-        // 2. Check Session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-            await fetchProfile(session.user.id);
+        try {
+            fetchCourses(); 
+            await fetchSettings();
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                await fetchProfile(session.user.id, session.user.email);
+            }
+        } catch (e) {
+            console.error("Initialization error:", e);
+        } finally {
+            if (mounted) setLoading(false);
         }
-        
-        if (mounted) setLoading(false);
     };
-
     initializeApp();
-
-    // 3. Listen for Auth Changes (Login/Logout)
+    const safetyTimer = setTimeout(() => { if (mounted && loading) setLoading(false); }, 2000);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN') {
-        // CRITICAL FIX: Set loading true immediately to prevent UI flash/redirects
-        setLoading(true);
-        if (session?.user) {
-            await fetchProfile(session.user.id);
-        }
-        if (mounted) setLoading(false);
+      if (event === 'SIGNED_IN' && session?.user && !user) {
+          await fetchProfile(session.user.id, session.user.email);
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setEnrollments([]);
-        setLoading(false);
       }
     });
-
-    const settingsChannel = supabase.channel('public:site_settings')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_settings' }, (payload) => {
-            if (payload.new) {
-                const newData = payload.new as SiteSettings;
-                setSiteSettings(prev => ({
-                    ...defaultSettings,
-                    ...newData,
-                    social_links: { ...defaultSettings.social_links, ...(newData.social_links || {}) },
-                    stats: { ...defaultSettings.stats, ...(newData.stats || {}) },
-                    features_config: { ...defaultSettings.features_config, ...(newData.features_config || {}) },
-                    content_config: { ...defaultSettings.content_config, ...(newData.content_config || {}) },
-                    home_features: newData.home_features || defaultSettings.home_features
-                }));
-            }
-        })
-        .subscribe();
-
-    return () => {
-        mounted = false;
-        subscription.unsubscribe();
-        supabase.removeChannel(settingsChannel);
-    };
+    return () => { mounted = false; clearTimeout(safetyTimer); subscription.unsubscribe(); };
   }, []);
 
-  // Memoize the context value to prevent unnecessary re-renders
   const value = useMemo(() => ({
     user, loading, courses, enrollments, siteSettings, 
     refreshCourses: fetchCourses, refreshEnrollments, updateSettings, 
-    signOut, checkAccess, saveLessonProgress, getLessonProgress 
-  }), [user, loading, courses, enrollments, siteSettings]);
+    login, signOut, checkAccess, saveLessonProgress, getLessonProgress,
+    coursesLoading
+  }), [user, loading, courses, enrollments, siteSettings, coursesLoading]);
 
   return (
     <StoreContext.Provider value={value}>

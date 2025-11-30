@@ -104,6 +104,7 @@ export interface SiteSettings {
     social_telegram_visible?: boolean;
     social_youtube_visible?: boolean;
     social_tiktok_visible?: boolean;
+    social_twitter_visible?: boolean;
     social_whatsapp_visible?: boolean;
     [key: string]: any;
   };

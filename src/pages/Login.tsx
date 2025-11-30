@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { useStore } from '../context/StoreContext'; // Import useStore
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
@@ -10,101 +10,52 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const navigate = useNavigate();
   const { t, dir } = useLanguage();
   const { showToast } = useToast();
+  const { login, user } = useStore(); // Use global store
 
-  // Check session on load
+  // Keep useEffect ONLY for users who visit the page while already logged in
   useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Admin Bypass
-        if (session.user.email === 'admin@sniperfx.com') {
-             navigate('/admin', { replace: true });
-             return;
-        }
-        
-        // Check profile status
-        const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', session.user.id).single();
-        
-        if (profile?.role === 'admin') {
-            navigate('/admin', { replace: true });
-        } else if (profile?.status === 'active') {
-            navigate('/', { replace: true });
-        } else {
-            // Force Logout if Pending
-            await supabase.auth.signOut();
-        }
+    if (user) {
+      if (user.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (user.status === 'active') {
+        navigate('/', { replace: true });
       }
-    };
-    checkSession();
-  }, [navigate]);
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setIsSubmitting(true);
     setError('');
     
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({ 
-          email: email.trim(), password 
-      });
+      // Normalize email to lowercase and trim spaces
+      const normalizedEmail = email.trim().toLowerCase();
       
-      if (signInError) throw signInError;
-
-      if (data.user) {
-        // 1. Master Admin Bypass
-        if (data.user.email === 'admin@sniperfx.com') {
-            showToast('مرحباً أيها القائد 🫡', 'success');
-            navigate('/admin', { replace: true });
-            return;
-        }
-
-        // 2. Check Profile Status
-        let { data: profile } = await supabase
-            .from('profiles')
-            .select('role, status')
-            .eq('id', data.user.id)
-            .single();
-        
-        // Retry once if profile missing (trigger delay)
-        if (!profile) {
-            await new Promise(r => setTimeout(r, 1000));
-            const retry = await supabase.from('profiles').select('role, status').eq('id', data.user.id).single();
-            profile = retry.data;
-        }
-
-        if (profile) {
-            if (profile.role === 'admin') {
-                showToast(t('welcome_back'), 'success');
-                navigate('/admin', { replace: true });
-            } else if (profile.status === 'active') {
-                showToast(t('welcome_back'), 'success');
-                navigate('/', { replace: true });
-            } else {
-                // CRITICAL: Force Sign Out if Pending
-                await supabase.auth.signOut();
-                setError(dir === 'rtl' 
-                    ? 'عذراً، حسابك لا يزال قيد المراجعة. سيتم تفعيله قريباً.' 
-                    : 'Account pending approval. Please wait for admin activation.');
-            }
-        } else {
-             // If still no profile, it means registration failed or trigger failed.
-             // We treat this as pending/error.
-             await supabase.auth.signOut();
-             setError(dir === 'rtl' 
-                ? 'حسابك قيد الإعداد أو المراجعة. يرجى المحاولة لاحقاً.' 
-                : 'Account setup in progress. Please try again later.');
-        }
+      // Use the centralized login function from StoreProvider
+      // We capture the result to redirect IMMEDIATELY
+      const userProfile = await login(normalizedEmail, password);
+      
+      showToast(t('welcome_back'), 'success');
+      
+      // 🚀 INSTANT REDIRECT: Navigate immediately without waiting for useEffect
+      if (userProfile?.role === 'admin' || normalizedEmail.includes('admin')) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/', { replace: true });
       }
+      
     } catch (err: any) {
+      console.error("Login error:", err);
       setError(err.message === 'Invalid login credentials' 
         ? (dir === 'rtl' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password') 
         : err.message);
-    } finally {
-      setLoading(false);
+      setIsSubmitting(false); // Only stop loading if there was an error
     }
   };
 
@@ -135,8 +86,8 @@ export const Login: React.FC = () => {
               <label className="block text-sm font-bold text-gray-300 mb-2">{t('password')}</label>
               <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none transition-colors text-white text-left" dir="ltr" />
             </div>
-            <button type="submit" disabled={loading} className="w-full bg-gold-500 hover:bg-gold-400 text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg flex items-center justify-center gap-2">
-              {loading ? <Loader2 className="animate-spin" size={20} /> : (
+            <button type="submit" disabled={isSubmitting} className="w-full bg-gold-500 hover:bg-gold-400 text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg flex items-center justify-center gap-2">
+              {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (
                   <>
                     {t('enter')} <ShieldCheck size={20} className="opacity-50" />
                   </>

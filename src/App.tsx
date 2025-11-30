@@ -17,6 +17,7 @@ const Login = lazy(() => import('./pages/Login').then(module => ({ default: modu
 const Register = lazy(() => import('./pages/Register').then(module => ({ default: module.Register })));
 const CourseDetail = lazy(() => import('./pages/CourseDetail').then(module => ({ default: module.CourseDetail })));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
   constructor(props: {children: React.ReactNode}) {
@@ -133,6 +134,7 @@ const AppContent = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

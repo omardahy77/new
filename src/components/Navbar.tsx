@@ -4,7 +4,7 @@ import { Logo } from './Logo';
 import { MarketTicker } from './MarketTicker';
 import { useStore } from '../context/StoreContext';
 import { useLanguage } from '../context/LanguageContext';
-import { LogOut, LayoutDashboard, Menu, X, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { LogOut, LayoutDashboard, Menu, X, ShieldCheck, User as UserIcon, Settings } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
@@ -87,19 +87,19 @@ export const Navbar: React.FC = () => {
                     <span>{t('dashboard')}</span>
                   </Link>
                 ) : (
-                  // Student View: Profile Pill (Compact)
-                  <div className="flex items-center gap-3 ps-1 pe-4 py-1 bg-navy-800/50 rounded-full border border-white/10 backdrop-blur-sm h-9 shrink-0 max-w-[200px]">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-950 font-bold text-xs shadow-lg shrink-0">
+                  // Student View: Clickable Profile Pill
+                  <Link to="/profile" className="flex items-center gap-3 ps-1 pe-4 py-1 bg-navy-800/50 rounded-full border border-white/10 backdrop-blur-sm h-9 shrink-0 max-w-[200px] hover:bg-navy-800 hover:border-gold-500/30 transition-all group">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-navy-950 font-bold text-xs shadow-lg shrink-0 group-hover:scale-105 transition-transform">
                       {user.email.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
-                      <span className="text-xs font-bold text-white truncate max-w-[80px]">{user.email.split('@')[0]}</span>
+                      <span className="text-xs font-bold text-white truncate max-w-[80px] group-hover:text-gold-400 transition-colors">{user.full_name || user.email.split('@')[0]}</span>
                       <span className="text-gray-600 text-[10px] shrink-0">|</span>
                       <span className={`text-[10px] flex items-center gap-1 shrink-0 ${user.status === 'active' ? 'text-green-400' : 'text-yellow-400'}`}>
-                        <ShieldCheck size={10} /> {user.status === 'active' ? t('active_member') : t('pending_member')}
+                        <ShieldCheck size={10} />
                       </span>
                     </div>
-                  </div>
+                  </Link>
                 )}
 
                 {/* Logout Button - Flipped in RTL */}
@@ -154,15 +154,16 @@ export const Navbar: React.FC = () => {
             ) : (
                <div className="flex flex-col gap-4">
                   {user.role !== 'admin' && (
-                    <div className="flex items-center gap-4 p-4 bg-navy-900 rounded-xl border border-white/5">
+                    <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 p-4 bg-navy-900 rounded-xl border border-white/5 hover:border-gold-500/30 transition-colors">
                         <div className="w-12 h-12 rounded-full bg-gold-500 flex items-center justify-center text-navy-950 font-bold text-xl">
                         {user.email.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                        <p className="text-base font-bold text-white">{user.email}</p>
+                        <p className="text-base font-bold text-white">{user.full_name || user.email}</p>
                         <p className="text-sm text-gray-400">{user.status === 'active' ? t('active_member') : t('pending_member')}</p>
                         </div>
-                    </div>
+                        <Settings className="text-gold-500 mr-auto" size={20} />
+                    </Link>
                   )}
                   
                   {user.role === 'admin' && (
