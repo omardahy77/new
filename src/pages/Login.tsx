@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
-import { AlertCircle, Loader2, Clock } from 'lucide-react';
+import { AlertCircle, Loader2, Clock, ShieldCheck } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -20,14 +20,24 @@ export const Login: React.FC = () => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // FAST TRACK: If it's the admin email, go straight to dashboard
+        if (session.user.email === 'admin@sniperfx.com') {
+             navigate('/admin', { replace: true });
+             return;
+        }
+
+        // Normal User Flow
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+        
         if (profile) {
-            if (profile.status === 'pending' && profile.role !== 'admin') {
-                // Force logout if pending
-                await supabase.auth.signOut();
-                setError(dir === 'rtl' ? 'حسابك قيد المراجعة. يرجى انتظار موافقة المشرف.' : 'Account pending approval. Please wait for admin.');
+            if (profile.role === 'admin') {
+                navigate('/admin', { replace: true });
+            } else if (profile.status === 'active') {
+                navigate('/', { replace: true });
             } else {
-                navigate(profile.role === 'admin' ? '/admin' : '/');
+                // Pending student
+                await supabase.auth.signOut();
+                setError(dir === 'rtl' ? 'حسابك قيد المراجعة.' : 'Account pending approval.');
             }
         }
       }
@@ -48,33 +58,43 @@ export const Login: React.FC = () => {
       if (signInError) throw signInError;
 
       if (data.user) {
-        // 1. Fetch Profile to check Status
-        let { data: profile } = await supabase.from('profiles').select('*').eq('id', data.user.id).single();
+        // 1. INSTANT ADMIN REDIRECT (Priority 1)
+        if (data.user.email === 'admin@sniperfx.com') {
+            showToast('مرحباً أيها القائد 🫡', 'success');
+            // Use window.location for a hard reload to ensure fresh state for admin
+            navigate('/admin', { replace: true });
+            return;
+        }
+
+        showToast(t('welcome_back'), 'success');
+
+        // 2. Normal User Check
+        let { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
         
-        // 2. Check Status
         if (profile) {
             if (profile.role === 'admin') {
-                showToast(t('welcome_back'), 'success');
-                navigate('/admin');
+                navigate('/admin', { replace: true });
             } else if (profile.status === 'active') {
-                showToast(t('welcome_back'), 'success');
                 navigate('/');
             } else {
-                // BLOCK LOGIN
                 await supabase.auth.signOut();
                 setError(dir === 'rtl' 
-                    ? 'عذراً، حسابك لا يزال قيد المراجعة من قبل الإدارة. يرجى الانتظار.' 
-                    : 'Sorry, your account is still pending admin approval. Please wait.');
+                    ? 'عذراً، حسابك لا يزال قيد المراجعة من قبل الإدارة.' 
+                    : 'Sorry, your account is still pending admin approval.');
             }
         } else {
-            // Handle edge case where trigger might have failed
+             // Fallback if profile missing
              await supabase.auth.signOut();
-             setError(dir === 'rtl' ? 'خطأ في الحساب. يرجى التواصل مع الدعم.' : 'Account error. Contact support.');
+             setError(dir === 'rtl' ? 'جاري إعداد حسابك، يرجى المحاولة بعد دقيقة.' : 'Setting up account, please try again in a minute.');
         }
       }
     } catch (err: any) {
       setError(err.message === 'Invalid login credentials' 
-        ? (dir === 'rtl' ? 'البيانات غير صحيحة' : 'Invalid credentials') 
+        ? (dir === 'rtl' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password') 
         : err.message);
     } finally {
       setLoading(false);
@@ -93,8 +113,8 @@ export const Login: React.FC = () => {
           <p className="text-center text-gray-400 mb-8 text-sm">{t('login_subtitle')}</p>
 
           {error && (
-            <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${error.includes('pending') || error.includes('مراجعة') || error.includes('الانتظار') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-               {error.includes('pending') || error.includes('مراجعة') || error.includes('الانتظار') ? <Clock size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
+            <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${error.includes('pending') || error.includes('مراجعة') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+               {error.includes('pending') || error.includes('مراجعة') ? <Clock size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
                <span>{error}</span>
             </div>
           )}
@@ -109,7 +129,11 @@ export const Login: React.FC = () => {
               <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none transition-colors text-white text-left" dir="ltr" />
             </div>
             <button type="submit" disabled={loading} className="w-full bg-gold-500 hover:bg-gold-400 text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg flex items-center justify-center gap-2">
-              {loading ? <Loader2 className="animate-spin" size={20} /> : t('enter')}
+              {loading ? <Loader2 className="animate-spin" size={20} /> : (
+                  <>
+                    {t('enter')} <ShieldCheck size={20} className="opacity-50" />
+                  </>
+              )}
             </button>
           </form>
 

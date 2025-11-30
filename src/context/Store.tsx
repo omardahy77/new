@@ -17,7 +17,7 @@ interface StoreContextType {
   getLessonProgress: (lessonId: string) => Promise<LessonProgress | null>;
 }
 
-// Default Settings - FULL ARABIC DEFAULTS
+// Default Settings
 const defaultSettings: SiteSettings = {
   site_name: "Sniper FX Gold",
   site_name_en: "Sniper FX Gold",
@@ -57,7 +57,12 @@ const defaultSettings: SiteSettings = {
     social_tiktok_visible: true,
     social_whatsapp_visible: true
   },
-  content_config: {}
+  content_config: {
+    hero_title_line1: "تداول بذكاء",
+    hero_title_line1_en: "Trade Smart",
+    hero_title_line2: "بدقة القناص",
+    hero_title_line2_en: "With Sniper Precision"
+  }
 };
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -71,29 +76,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchProfile = async (userId: string) => {
     try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const isMasterAdmin = authUser?.email === 'admin@sniperfx.com';
+
       let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single();
       
-      // Robust Fallback: If profile is missing, create it immediately
-      if (!data || error) {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser && authUser.id === userId) {
-           // CRITICAL: Ensure Admin gets Admin role even if profile was deleted
-           const isMasterAdmin = authUser.email === 'admin@sniperfx.com';
-           
-           await supabase.from('profiles').upsert({
-               id: authUser.id,
-               email: authUser.email,
-               role: isMasterAdmin ? 'admin' : 'student',
-               status: isMasterAdmin ? 'active' : 'pending'
-           }, { onConflict: 'id' });
-           
-           const { data: retry } = await supabase.from('profiles').select('*').eq('id', userId).single();
-           data = retry;
-        }
+      if (isMasterAdmin) {
+          // Force Admin Role in Memory for Master Admin
+          if (!data) {
+              data = {
+                  id: userId,
+                  email: 'admin@sniperfx.com',
+                  role: 'admin',
+                  status: 'active',
+                  full_name: 'System Admin'
+              };
+          } else {
+              data.role = 'admin';
+              data.status = 'active';
+          }
       }
 
       if (data) {
@@ -112,7 +117,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchCourses = async () => {
     try {
-      // Public query - relies on RLS being open for anon
       const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
       if (!error && data) setCourses(data as Course[]);
     } catch (e) {
@@ -122,25 +126,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase.from('site_settings').select('*').single();
+      const { data, error } = await supabase
+        .from('site_settings')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       
-      if (error && (error.code === 'PGRST116' || error.message.includes('Results contain 0 rows'))) {
-        const { data: newData } = await supabase
-            .from('site_settings')
-            .insert([{
-                ...defaultSettings,
-                social_links: defaultSettings.social_links,
-                stats: defaultSettings.stats,
-                features_config: defaultSettings.features_config,
-                content_config: defaultSettings.content_config
-            }])
-            .select()
-            .single();
-            
-        if (newData) {
-             setSiteSettings({ ...defaultSettings, ...newData });
-        }
-      } else if (data) {
+      if (!data) {
+        setSiteSettings(defaultSettings);
+      } else {
         setSiteSettings({
           ...defaultSettings,
           ...data,
@@ -185,13 +180,60 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return data as LessonProgress;
   };
 
+  // --- ROBUST UPDATE SETTINGS FUNCTION ---
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
     try {
-        if (siteSettings.id) {
-            const merged = { ...siteSettings, ...newSettings };
-            const { error } = await supabase.from('site_settings').update(merged).eq('id', siteSettings.id);
-            if (error) throw error;
-            setSiteSettings(merged);
+        // 1. Always fetch the LATEST ID from the database to avoid stale state
+        const { data: existing } = await supabase
+            .from('site_settings')
+            .select('id')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        
+        const targetId = existing?.id;
+        
+        // Prepare payload (remove ID and created_at to avoid conflicts)
+        // CRITICAL FIX: Remove non-existent columns from root payload to prevent PGRST204 error
+        // We explicitly strip out UI-only fields that are stored in content_config
+        const { 
+          id, created_at, 
+          hero_title_line1, hero_title_line1_en, 
+          hero_title_line2, hero_title_line2_en, 
+          home_features, // <--- EXCLUDED: This column does not exist in DB
+          ...payload 
+        } = { ...siteSettings, ...newSettings };
+        
+        let result;
+
+        if (targetId) {
+            // UPDATE existing row
+            result = await supabase
+                .from('site_settings')
+                .update(payload)
+                .eq('id', targetId)
+                .select()
+                .single();
+        } else {
+            // INSERT new row if table is empty
+            result = await supabase
+                .from('site_settings')
+                .insert([payload])
+                .select()
+                .single();
+        }
+
+        if (result.error) throw result.error;
+        
+        // Update Local State immediately
+        if (result.data) {
+            setSiteSettings(prev => ({
+                ...prev,
+                ...result.data,
+                social_links: { ...prev.social_links, ...(result.data.social_links || {}) },
+                features_config: { ...prev.features_config, ...(result.data.features_config || {}) },
+                content_config: { ...prev.content_config, ...(result.data.content_config || {}) }
+            }));
         }
     } catch (error) {
         console.error("Error updating settings:", error);
@@ -201,10 +243,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const checkAccess = (course: Course) => {
     if (user?.role === 'admin') return true;
-    if (!course.is_paid) return true; // Free courses accessible to everyone (even visitors now, if we want)
+    if (!course.is_paid) return true; 
     
-    if (!user) return false; // Visitors cannot access paid
-    if (user.status !== 'active') return false; // Pending users cannot access paid
+    if (!user) return false;
+    if (user.status !== 'active') return false;
     
     return enrollments.some(e => e.course_id === course.id);
   };
@@ -229,17 +271,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setLoading(false);
     });
 
+    // Real-time listener for settings
     const settingsChannel = supabase.channel('public:site_settings')
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'site_settings' }, (payload) => {
-            const newData = payload.new as SiteSettings;
-            setSiteSettings(prev => ({
-                ...defaultSettings,
-                ...newData,
-                social_links: { ...defaultSettings.social_links, ...(newData.social_links || {}) },
-                stats: { ...defaultSettings.stats, ...(newData.stats || {}) },
-                features_config: { ...defaultSettings.features_config, ...(newData.features_config || {}) },
-                content_config: { ...defaultSettings.content_config, ...(newData.content_config || {}) }
-            }));
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'site_settings' }, (payload) => {
+            if (payload.new) {
+                const newData = payload.new as SiteSettings;
+                setSiteSettings(prev => ({
+                    ...defaultSettings,
+                    ...newData,
+                    social_links: { ...defaultSettings.social_links, ...(newData.social_links || {}) },
+                    stats: { ...defaultSettings.stats, ...(newData.stats || {}) },
+                    features_config: { ...defaultSettings.features_config, ...(newData.features_config || {}) },
+                    content_config: { ...defaultSettings.content_config, ...(newData.content_config || {}) }
+                }));
+            }
         })
         .subscribe();
 

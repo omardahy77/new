@@ -14,7 +14,7 @@ import {
 export const AdminDashboard: React.FC = () => {
   const { user, siteSettings, updateSettings, refreshCourses } = useStore();
   const { showToast } = useToast();
-  const { t } = useLanguage(); // We will use manual Arabic strings for Admin to ensure 100% Arabic
+  const { t } = useLanguage(); 
   
   // Tabs
   const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'courses' | 'settings' | 'content'>('requests');
@@ -58,8 +58,11 @@ export const AdminDashboard: React.FC = () => {
     return () => { supabase.removeChannel(profilesChannel); };
   }, []);
 
+  // Keep local state in sync with global store until user starts editing
   useEffect(() => {
-    setLocalSettings(siteSettings);
+    if (!saving) {
+        setLocalSettings(siteSettings);
+    }
   }, [siteSettings]);
 
   // --- DATA FETCHING ---
@@ -97,10 +100,19 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleRejectUser = async (userId: string) => {
-    if(!confirm('هل أنت متأكد من رفض وحذف هذا العضو؟')) return;
+    if(!confirm('هل أنت متأكد من حذف هذا العضو نهائياً من قاعدة البيانات؟ لن يتمكن من الدخول مرة أخرى.')) return;
+    
+    // Use the new secure RPC function
     const { error } = await supabase.rpc('delete_user_by_admin', { target_user_id: userId });
-    if (error) showToast(`فشل العملية: ${error.message}`, 'error');
-    else showToast('تم رفض وحذف العضو', 'success');
+    
+    if (error) {
+        console.error("Delete error:", error);
+        showToast(`فشل الحذف: ${error.message}`, 'error');
+    } else {
+        showToast('تم حذف العضو نهائياً', 'success');
+        // Manually update list to reflect change immediately
+        setUsersList(prev => prev.filter(u => u.id !== userId));
+    }
   };
 
   const handleEnrollUser = async () => {
@@ -143,6 +155,16 @@ export const AdminDashboard: React.FC = () => {
     } catch (error: any) { showToast(error.message, 'error'); }
   };
 
+  const handleDeleteCourse = async (courseId: string) => {
+      if (!confirm('هل أنت متأكد من حذف الكورس؟ سيتم حذف جميع الدروس المرتبطة به.')) return;
+      const { error } = await supabase.from('courses').delete().eq('id', courseId);
+      if (error) showToast(error.message, 'error');
+      else {
+          showToast('تم حذف الكورس', 'success');
+          fetchCourses();
+      }
+  };
+
   const handleSaveLesson = async () => {
     if (!selectedCourseId || !newLesson.title || !newLesson.video_url) return;
     const processed = processVideoUrl(newLesson.video_url);
@@ -172,10 +194,12 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveSettings = async () => {
       setSaving(true);
       try {
+          // Pass the entire localSettings object
           await updateSettings(localSettings);
           showToast('تم حفظ جميع الإعدادات والمحتوى بنجاح!', 'success');
       } catch (e: any) {
-          showToast(`خطأ: ${e.message}`, 'error');
+          console.error("Save failed:", e);
+          showToast(`خطأ في الحفظ: ${e.message}`, 'error');
       } finally {
           setSaving(false);
       }
@@ -262,7 +286,7 @@ export const AdminDashboard: React.FC = () => {
                           </div>
                           <div className="flex gap-2">
                             <button onClick={() => handleApproveUser(u.id)} className="bg-green-500 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-green-600 flex items-center gap-1"><CheckCircle size={14} /> قبول</button>
-                            <button onClick={() => handleRejectUser(u.id)} className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-500/20 flex items-center gap-1"><Ban size={14} /> رفض</button>
+                            <button onClick={() => handleRejectUser(u.id)} className="bg-red-500/10 text-red-400 px-4 py-2 rounded-lg text-xs font-bold hover:bg-red-500/20 flex items-center gap-1"><Trash2 size={14} /> حذف نهائي</button>
                           </div>
                         </div>
                       ))}
@@ -304,7 +328,7 @@ export const AdminDashboard: React.FC = () => {
                                 <Plus size={14} /> تسجيل في كورس
                              </button>
                              {u.role !== 'admin' && (
-                                <button onClick={() => handleRejectUser(u.id)} className="text-red-400 p-2 hover:bg-red-500/10 rounded-lg" title="حذف العضو"><Trash2 size={16} /></button>
+                                <button onClick={() => handleRejectUser(u.id)} className="text-red-400 p-2 hover:bg-red-500/10 rounded-lg" title="حذف العضو نهائياً"><Trash2 size={16} /></button>
                              )}
                           </div>
                         </div>
@@ -340,6 +364,7 @@ export const AdminDashboard: React.FC = () => {
                           <div className="flex gap-2">
                              <button onClick={() => { setSelectedCourseId(course.id); fetchLessons(course.id); setLessonsModalOpen(true); }} className="bg-navy-800 text-white px-3 py-1.5 rounded text-xs border border-white/10">الدروس</button>
                              <button onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }} className="bg-navy-800 text-gold-400 px-3 py-1.5 rounded text-xs border border-white/10">تعديل</button>
+                             <button onClick={() => handleDeleteCourse(course.id)} className="bg-red-500/10 text-red-400 px-3 py-1.5 rounded text-xs border border-red-500/20 hover:bg-red-500/20">حذف</button>
                           </div>
                         </div>
                       ))}
@@ -375,8 +400,9 @@ export const AdminDashboard: React.FC = () => {
                         {contentSubTab === 'home' && (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-xs text-gray-400">عنوان الهيرو (السطر 1)</label><input className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white" value={getRoot('hero_title_line1')} onChange={e => updateRoot('hero_title_line1', e.target.value)} /></div>
-                                    <div><label className="text-xs text-gray-400">عنوان الهيرو (السطر 2 - ذهبي)</label><input className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white" value={getRoot('hero_title_line2')} onChange={e => updateRoot('hero_title_line2', e.target.value)} /></div>
+                                    {/* CRITICAL FIX: Using getContent/updateContent for JSON fields */}
+                                    <div><label className="text-xs text-gray-400">عنوان الهيرو (السطر 1)</label><input className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white" value={getContent('hero_title_line1')} onChange={e => updateContent('hero_title_line1', e.target.value)} /></div>
+                                    <div><label className="text-xs text-gray-400">عنوان الهيرو (السطر 2 - ذهبي)</label><input className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white" value={getContent('hero_title_line2')} onChange={e => updateContent('hero_title_line2', e.target.value)} /></div>
                                 </div>
                                 <div><label className="text-xs text-gray-400">وصف الهيرو</label><textarea className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white h-20" value={getRoot('hero_desc')} onChange={e => updateRoot('hero_desc', e.target.value)} /></div>
                                 

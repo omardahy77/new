@@ -112,10 +112,10 @@ export const Home: React.FC = () => {
             
             <h1 className="text-5xl md:text-7xl lg:text-8xl font-black mb-8 tracking-tight leading-[1.1]">
               <span className="block text-white drop-shadow-2xl z-0 relative">
-                {getSetting('hero_title_line1') || t('hero_line1_default')}
+                {getContent('hero_title_line1') || t('hero_line1_default')}
               </span>
               <span className="block text-gold-500 drop-shadow-[0_0_15px_rgba(255,215,0,0.2)] relative z-10 mt-2 md:mt-4">
-                {getSetting('hero_title_line2') || t('hero_line2_default')}
+                {getContent('hero_title_line2') || t('hero_line2_default')}
               </span>
             </h1>
             
