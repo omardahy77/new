@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../context/Store';
+import { useStore } from '../context/StoreContext';
 
 export const Logo: React.FC<{ className?: string }> = ({ className }) => {
   const { siteSettings } = useStore();

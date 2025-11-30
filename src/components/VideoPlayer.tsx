@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import ReactPlayer from 'react-player';
-import { useStore } from '../context/Store';
+import { useStore } from '../context/StoreContext';
 import { processVideoUrl } from '../utils/videoHelpers';
 import { Loader2, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Subtitle } from '../types';

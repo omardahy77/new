@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Logo } from './Logo';
 import { MarketTicker } from './MarketTicker';
-import { useStore } from '../context/Store';
+import { useStore } from '../context/StoreContext';
 import { useLanguage } from '../context/LanguageContext';
 import { LogOut, LayoutDashboard, Menu, X, ShieldCheck, User as UserIcon } from 'lucide-react';
 

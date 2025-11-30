@@ -29,7 +29,7 @@ export const Register: React.FC = () => {
           data: {
             full_name: fullName,
             phone_number: phoneNumber,
-            role: 'student' 
+            role: 'student' // Metadata for the trigger
           }
         }
       });
@@ -37,11 +37,29 @@ export const Register: React.FC = () => {
       if (signUpError) throw signUpError;
 
       if (authData.user) {
-        // 2. Sign Out immediately (The Trigger in DB handles profile creation with 'pending' status)
+        // 2. MANUAL FALLBACK: Try to insert profile manually
+        // This ensures the user appears in the dashboard even if the DB trigger fails or is slow.
+        const { error: profileError } = await supabase.from('profiles').insert({
+            id: authData.user.id,
+            email: email,
+            full_name: fullName,
+            phone_number: phoneNumber,
+            role: 'student',
+            status: 'pending',
+            created_at: new Date().toISOString()
+        });
+
+        // We ignore "duplicate key" errors (code 23505) because that means the trigger WORKED (Good!)
+        if (profileError && profileError.code !== '23505') {
+            console.warn("Manual profile creation warning:", profileError);
+        }
+
+        // 3. Sign Out immediately to prevent "partial login" state
         await supabase.auth.signOut();
         setSuccess(true);
       }
     } catch (err: any) {
+      console.error("Registration error:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -58,8 +76,8 @@ export const Register: React.FC = () => {
           <h2 className="text-3xl font-bold text-white mb-4">{t('request_sent')}</h2>
           <p className="text-gray-400 mb-10 leading-relaxed text-lg">
             {dir === 'rtl' 
-             ? 'تم استلام طلبك بنجاح! حسابك الآن قيد المراجعة. لا يمكنك الدخول حتى يتم تفعيل الحساب من قبل المشرف.'
-             : 'Your request has been received! Your account is pending approval. You cannot login until an admin activates it.'}
+             ? 'تم استلام طلبك بنجاح! حسابك الآن قيد المراجعة. سيتم إشعارك عند التفعيل.'
+             : 'Your request has been received! Your account is pending approval.'}
           </p>
           <Link to="/" className="btn-gold w-full block py-4 text-center text-lg shadow-lg shadow-gold-500/10 font-bold">{t('back_home')}</Link>
         </div>

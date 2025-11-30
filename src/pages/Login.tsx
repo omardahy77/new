@@ -20,30 +20,27 @@ export const Login: React.FC = () => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        // FAST TRACK: If it's the admin email, go straight to dashboard
+        // Admin Bypass
         if (session.user.email === 'admin@sniperfx.com') {
              navigate('/admin', { replace: true });
              return;
         }
-
-        // Normal User Flow
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
         
-        if (profile) {
-            if (profile.role === 'admin') {
-                navigate('/admin', { replace: true });
-            } else if (profile.status === 'active') {
-                navigate('/', { replace: true });
-            } else {
-                // Pending student
-                await supabase.auth.signOut();
-                setError(dir === 'rtl' ? 'حسابك قيد المراجعة.' : 'Account pending approval.');
-            }
+        // Check profile status
+        const { data: profile } = await supabase.from('profiles').select('role, status').eq('id', session.user.id).single();
+        
+        if (profile?.role === 'admin') {
+            navigate('/admin', { replace: true });
+        } else if (profile?.status === 'active') {
+            navigate('/', { replace: true });
+        } else {
+            // Force Logout if Pending
+            await supabase.auth.signOut();
         }
       }
     };
     checkSession();
-  }, [navigate, dir]);
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,38 +55,48 @@ export const Login: React.FC = () => {
       if (signInError) throw signInError;
 
       if (data.user) {
-        // 1. INSTANT ADMIN REDIRECT (Priority 1)
+        // 1. Master Admin Bypass
         if (data.user.email === 'admin@sniperfx.com') {
             showToast('مرحباً أيها القائد 🫡', 'success');
-            // Use window.location for a hard reload to ensure fresh state for admin
             navigate('/admin', { replace: true });
             return;
         }
 
-        showToast(t('welcome_back'), 'success');
-
-        // 2. Normal User Check
+        // 2. Check Profile Status
         let { data: profile } = await supabase
             .from('profiles')
-            .select('*')
+            .select('role, status')
             .eq('id', data.user.id)
             .single();
         
+        // Retry once if profile missing (trigger delay)
+        if (!profile) {
+            await new Promise(r => setTimeout(r, 1000));
+            const retry = await supabase.from('profiles').select('role, status').eq('id', data.user.id).single();
+            profile = retry.data;
+        }
+
         if (profile) {
             if (profile.role === 'admin') {
+                showToast(t('welcome_back'), 'success');
                 navigate('/admin', { replace: true });
             } else if (profile.status === 'active') {
-                navigate('/');
+                showToast(t('welcome_back'), 'success');
+                navigate('/', { replace: true });
             } else {
+                // CRITICAL: Force Sign Out if Pending
                 await supabase.auth.signOut();
                 setError(dir === 'rtl' 
-                    ? 'عذراً، حسابك لا يزال قيد المراجعة من قبل الإدارة.' 
-                    : 'Sorry, your account is still pending admin approval.');
+                    ? 'عذراً، حسابك لا يزال قيد المراجعة. سيتم تفعيله قريباً.' 
+                    : 'Account pending approval. Please wait for admin activation.');
             }
         } else {
-             // Fallback if profile missing
+             // If still no profile, it means registration failed or trigger failed.
+             // We treat this as pending/error.
              await supabase.auth.signOut();
-             setError(dir === 'rtl' ? 'جاري إعداد حسابك، يرجى المحاولة بعد دقيقة.' : 'Setting up account, please try again in a minute.');
+             setError(dir === 'rtl' 
+                ? 'حسابك قيد الإعداد أو المراجعة. يرجى المحاولة لاحقاً.' 
+                : 'Account setup in progress. Please try again later.');
         }
       }
     } catch (err: any) {
@@ -113,8 +120,8 @@ export const Login: React.FC = () => {
           <p className="text-center text-gray-400 mb-8 text-sm">{t('login_subtitle')}</p>
 
           {error && (
-            <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${error.includes('pending') || error.includes('مراجعة') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-               {error.includes('pending') || error.includes('مراجعة') ? <Clock size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
+            <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${error.includes('pending') || error.includes('مراجعة') || error.includes('إعداد') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+               {error.includes('pending') || error.includes('مراجعة') || error.includes('إعداد') ? <Clock size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
                <span>{error}</span>
             </div>
           )}

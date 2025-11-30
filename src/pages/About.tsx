@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../context/Store';
+import { useStore } from '../context/StoreContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Logo } from '../components/Logo';
 import { Target, Award, Users, Clock, Headphones } from 'lucide-react';

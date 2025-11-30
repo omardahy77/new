@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useStore } from '../context/Store';
+import { useStore } from '../context/StoreContext';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
@@ -51,6 +51,7 @@ export const AdminDashboard: React.FC = () => {
     fetchCourses();
     fetchAllEnrollments();
     
+    // Real-time updates for requests
     const profilesChannel = supabase.channel('admin_profiles')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchUsers())
         .subscribe();
@@ -96,13 +97,16 @@ export const AdminDashboard: React.FC = () => {
   const handleApproveUser = async (userId: string) => {
     const { error } = await supabase.from('profiles').update({ status: 'active' }).eq('id', userId);
     if (error) showToast(`فشل العملية: ${error.message}`, 'error');
-    else showToast('تم قبول العضو بنجاح', 'success');
+    else {
+        showToast('تم قبول العضو بنجاح', 'success');
+        fetchUsers(); // Refresh list immediately
+    }
   };
 
   const handleRejectUser = async (userId: string) => {
     if(!confirm('هل أنت متأكد من حذف هذا العضو نهائياً من قاعدة البيانات؟ لن يتمكن من الدخول مرة أخرى.')) return;
     
-    // Use the new secure RPC function
+    // Use the new secure RPC function created in the migration
     const { error } = await supabase.rpc('delete_user_by_admin', { target_user_id: userId });
     
     if (error) {
@@ -110,7 +114,6 @@ export const AdminDashboard: React.FC = () => {
         showToast(`فشل الحذف: ${error.message}`, 'error');
     } else {
         showToast('تم حذف العضو نهائياً', 'success');
-        // Manually update list to reflect change immediately
         setUsersList(prev => prev.filter(u => u.id !== userId));
     }
   };
@@ -142,17 +145,35 @@ export const AdminDashboard: React.FC = () => {
 
   // --- COURSE MANAGEMENT ---
   const handleSaveCourse = async () => {
-    if (!editingCourse.title) return;
+    if (!editingCourse.title) {
+        showToast('يرجى كتابة عنوان الكورس', 'error');
+        return;
+    }
+    
     const courseData = {
-      title: editingCourse.title, description: editingCourse.description, thumbnail: editingCourse.thumbnail,
-      is_paid: editingCourse.is_paid || false, level: editingCourse.level || 'متوسط',
+      title: editingCourse.title, 
+      description: editingCourse.description, 
+      thumbnail: editingCourse.thumbnail,
+      is_paid: editingCourse.is_paid || false, 
+      level: editingCourse.level || 'متوسط',
       rating: editingCourse.rating || 5,
     };
+
     try {
-        if (editingCourse.id) await supabase.from('courses').update(courseData).eq('id', editingCourse.id);
-        else await supabase.from('courses').insert(courseData);
-        showToast('تم حفظ الكورس بنجاح', 'success'); setCourseModalOpen(false); fetchCourses();
-    } catch (error: any) { showToast(error.message, 'error'); }
+        if (editingCourse.id) {
+            const { error } = await supabase.from('courses').update(courseData).eq('id', editingCourse.id);
+            if (error) throw error;
+        } else {
+            const { error } = await supabase.from('courses').insert(courseData);
+            if (error) throw error;
+        }
+        showToast('تم حفظ الكورس بنجاح', 'success'); 
+        setCourseModalOpen(false); 
+        fetchCourses();
+    } catch (error: any) { 
+        console.error("Course save error:", error);
+        showToast(`خطأ في الحفظ: ${error.message}`, 'error'); 
+    }
   };
 
   const handleDeleteCourse = async (courseId: string) => {
@@ -166,35 +187,52 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleSaveLesson = async () => {
-    if (!selectedCourseId || !newLesson.title || !newLesson.video_url) return;
+    if (!selectedCourseId || !newLesson.title || !newLesson.video_url) {
+        showToast('يرجى ملء البيانات الأساسية للدرس', 'error');
+        return;
+    }
+    
     const processed = processVideoUrl(newLesson.video_url);
     const lessonData = {
-      course_id: selectedCourseId, title: newLesson.title, description: newLesson.description,
-      video_url: processed.url, thumbnail_url: newLesson.thumbnail_url,
-      duration: newLesson.duration, order: newLesson.order, is_published: newLesson.is_published
+      course_id: selectedCourseId, 
+      title: newLesson.title, 
+      description: newLesson.description,
+      video_url: processed.url, 
+      thumbnail_url: newLesson.thumbnail_url,
+      duration: newLesson.duration, 
+      order: newLesson.order, 
+      is_published: newLesson.is_published
     };
 
-    if (editingLessonId) await supabase.from('lessons').update(lessonData).eq('id', editingLessonId);
-    else await supabase.from('lessons').insert(lessonData);
+    try {
+        if (editingLessonId) {
+            await supabase.from('lessons').update(lessonData).eq('id', editingLessonId);
+        } else {
+            await supabase.from('lessons').insert(lessonData);
+        }
 
-    showToast('تم حفظ الدرس بنجاح', 'success');
-    // Update course duration
-    const { data: fresh } = await supabase.from('lessons').select('*').eq('course_id', selectedCourseId);
-    if (fresh) {
-        setCurrentCourseLessons(fresh as Lesson[]);
-        const totalMins = calculateTotalMinutes(fresh as any);
-        await supabase.from('courses').update({ duration: totalMins.toString() }).eq('id', selectedCourseId);
-        fetchCourses();
+        showToast('تم حفظ الدرس بنجاح', 'success');
+        
+        // Update course duration
+        const { data: fresh } = await supabase.from('lessons').select('*').eq('course_id', selectedCourseId);
+        if (fresh) {
+            setCurrentCourseLessons(fresh as Lesson[]);
+            const totalMins = calculateTotalMinutes(fresh as any);
+            await supabase.from('courses').update({ duration: totalMins.toString() }).eq('id', selectedCourseId);
+            fetchCourses();
+        }
+        setEditingLessonId(null);
+        setNewLesson({ title: '', description: '', video_url: '', thumbnail_url: '', duration: '10:00', order: (fresh?.length || 0) + 1, is_published: true });
+    } catch (e: any) {
+        showToast(`خطأ: ${e.message}`, 'error');
     }
-    setEditingLessonId(null);
-    setNewLesson({ title: '', description: '', video_url: '', thumbnail_url: '', duration: '10:00', order: (fresh?.length || 0) + 1, is_published: true });
   };
 
   // --- CONTENT MANAGEMENT ---
   const handleSaveSettings = async () => {
       setSaving(true);
       try {
-          // Pass the entire localSettings object
+          // Pass the entire localSettings object. Store.tsx handles the payload construction.
           await updateSettings(localSettings);
           showToast('تم حفظ جميع الإعدادات والمحتوى بنجاح!', 'success');
       } catch (e: any) {
@@ -223,8 +261,17 @@ export const AdminDashboard: React.FC = () => {
 
   const updateRoot = (key: string, value: string) => {
       const langKey = editingLang === 'en' ? `${key}_en` : key;
-      setLocalSettings(prev => ({ ...prev, [langKey]: value }));
+      // Update both root and content_config to ensure sync
+      setLocalSettings(prev => ({ 
+          ...prev, 
+          [langKey]: value,
+          content_config: {
+              ...(prev.content_config || {}),
+              [langKey]: value
+          }
+      }));
   };
+  
   const getRoot = (key: string) => {
       const langKey = editingLang === 'en' ? `${key}_en` : key;
       return (localSettings as any)?.[langKey] || '';
@@ -400,7 +447,6 @@ export const AdminDashboard: React.FC = () => {
                         {contentSubTab === 'home' && (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
-                                    {/* CRITICAL FIX: Using getContent/updateContent for JSON fields */}
                                     <div><label className="text-xs text-gray-400">عنوان الهيرو (السطر 1)</label><input className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white" value={getContent('hero_title_line1')} onChange={e => updateContent('hero_title_line1', e.target.value)} /></div>
                                     <div><label className="text-xs text-gray-400">عنوان الهيرو (السطر 2 - ذهبي)</label><input className="w-full bg-navy-950 border border-white/10 rounded p-2 text-white" value={getContent('hero_title_line2')} onChange={e => updateContent('hero_title_line2', e.target.value)} /></div>
                                 </div>

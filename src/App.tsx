@@ -1,6 +1,7 @@
 import React, { useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { StoreProvider, useStore } from './context/Store';
+import { StoreProvider } from './context/StoreProvider';
+import { useStore } from './context/StoreContext';
 import { ToastProvider } from './context/ToastContext';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
@@ -25,7 +26,6 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   static getDerivedStateFromError() { return { hasError: true }; }
   
   handleReset = () => {
-    // Clear all storage to remove any bad state causing the crash
     localStorage.clear();
     sessionStorage.clear();
     window.location.href = '/';
@@ -96,7 +96,6 @@ const AppContent = () => {
   const { dir } = useLanguage();
   const location = useLocation();
 
-  // Security: Disable Right Click & Copy
   useEffect(() => {
     const handleContext = (e: Event) => e.preventDefault();
     const handleKey = (e: KeyboardEvent) => {
@@ -134,7 +133,6 @@ const AppContent = () => {
             <Route path="/register" element={<Register />} />
             <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
-            {/* Catch all route for 404 */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>

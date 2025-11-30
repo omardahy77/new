@@ -1,5 +1,5 @@
 import React from 'react';
-import { useStore } from '../context/Store';
+import { useStore } from '../context/StoreContext';
 import { useLanguage } from '../context/LanguageContext';
 import { Facebook, Send, Instagram, ExternalLink, Youtube, Video, Phone } from 'lucide-react';
 
