@@ -4,7 +4,10 @@ import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types
 import { StoreContext } from './StoreContext';
 import { translations } from '../utils/translations';
 
-// Default Settings with FULL Content Config populated
+// VERSION CONTROL: Increment this to force a cache clear on all client browsers
+const APP_VERSION = '1.6.0'; // Bumped for Master Stabilization
+
+// Default Settings
 const defaultSettings: SiteSettings = {
   site_name: "Sniper FX Gold",
   site_name_en: "Sniper FX Gold",
@@ -46,7 +49,6 @@ const defaultSettings: SiteSettings = {
     social_twitter_visible: true,
     social_whatsapp_visible: true
   },
-  // Pre-fill content config with defaults so inputs are not empty
   content_config: {
     hero_title_line1: translations.ar.hero_line1_default,
     hero_title_line1_en: translations.en.hero_line1_default,
@@ -111,8 +113,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(true);
 
-  // Optimized Fetch Profile
+  // --- ROBUST PROFILE FETCHING (SELF-HEALING) ---
   const fetchProfile = async (userId: string, userEmail?: string) => {
+    // 1. MASTER ADMIN BYPASS (Emergency Access)
+    // This ensures the admin can ALWAYS login, even if DB is slow
     if (userEmail === 'admin@sniperfx.com') {
         const adminUser = {
             id: userId,
@@ -127,17 +131,45 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     try {
+      // 2. Try to fetch profile
       let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
       
+      // 3. SELF-HEALING: If profile is missing but user is authenticated, CREATE IT.
+      if (!data) {
+         console.warn("⚠️ Profile missing for authenticated user. Attempting self-healing...");
+         
+         const newProfile = {
+             id: userId,
+             email: userEmail || '',
+             full_name: userEmail?.split('@')[0] || 'User',
+             role: 'student',
+             status: 'active' // Auto-activate for now to prevent login loops
+         };
+
+         const { data: createdProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert([newProfile])
+            .select()
+            .single();
+            
+         if (createError) {
+             console.error("❌ Failed to auto-create profile:", createError);
+         } else {
+             console.log("✅ Profile auto-created successfully.");
+             data = createdProfile;
+         }
+      }
+
       if (data) {
         setUser(data as User);
-        supabase.from('enrollments').select('*').eq('user_id', userId).then(({ data: enrollData }) => {
-            if (enrollData) setEnrollments(enrollData as Enrollment[]);
-        });
+        // Fetch enrollments
+        const { data: enrollData } = await supabase.from('enrollments').select('*').eq('user_id', userId);
+        if (enrollData) setEnrollments(enrollData as Enrollment[]);
+        
         return data as User;
       }
     } catch (error) {
@@ -148,12 +180,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const login = async (email: string, password: string): Promise<User | null> => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    if (data.user) {
-        return await fetchProfile(data.user.id, data.user.email);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (data.user) {
+          return await fetchProfile(data.user.id, data.user.email);
+      }
+      return null;
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      // Provide user-friendly message for 500 errors
+      if (err.message?.includes('Database error') || err.status === 500) {
+        // Log the full error for debugging
+        console.error("FULL DATABASE ERROR:", JSON.stringify(err, null, 2));
+        throw new Error('System Error: Database configuration issue. Please contact support or try again later.');
+      }
+      throw err;
     }
-    return null;
   };
 
   const fetchCourses = async () => {
@@ -170,7 +213,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchSettings = async () => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('site_settings')
         .select('*')
         .order('created_at', { ascending: false })
@@ -184,7 +227,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           social_links: { ...defaultSettings.social_links, ...(data.social_links || {}) },
           stats: { ...defaultSettings.stats, ...(data.stats || {}) },
           features_config: { ...defaultSettings.features_config, ...(data.features_config || {}) },
-          // Merge content config carefully to preserve defaults if keys are missing in DB
           content_config: { ...defaultSettings.content_config, ...(data.content_config || {}) },
           home_features: data.home_features || defaultSettings.home_features
         });
@@ -273,12 +315,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const signOut = async () => {
-    setUser(null);
-    setEnrollments([]);
-    await supabase.auth.signOut();
+    try {
+        setUser(null);
+        setEnrollments([]);
+        await supabase.auth.signOut();
+        // Force clear any lingering local storage items related to auth
+        localStorage.removeItem('sb-access-token');
+        localStorage.removeItem('sb-refresh-token');
+    } catch (e) {
+        console.error("Sign out error:", e);
+    }
   };
 
   useEffect(() => {
+    // --- CACHE CLEARING LOGIC ---
+    const currentVersion = localStorage.getItem('app_version');
+    if (currentVersion !== APP_VERSION) {
+        console.log(`🚀 New version detected (${APP_VERSION}). Clearing stale cache...`);
+        
+        // Preserve essential items if needed, but generally safer to clear all except auth
+        // We will try to preserve the Supabase session if possible
+        const sbKey = Object.keys(localStorage).find(key => key.startsWith('sb-'));
+        const sbSession = sbKey ? localStorage.getItem(sbKey) : null;
+        
+        localStorage.clear();
+        
+        if (sbKey && sbSession) {
+            localStorage.setItem(sbKey, sbSession);
+        }
+        
+        localStorage.setItem('app_version', APP_VERSION);
+    }
+    
     let mounted = true;
     const initializeApp = async () => {
         try {
@@ -295,7 +363,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
     };
     initializeApp();
-    const safetyTimer = setTimeout(() => { if (mounted && loading) setLoading(false); }, 2000);
+    
+    // Safety Timer: Ensure loading screen disappears even if DB is slow
+    const safetyTimer = setTimeout(() => { 
+        if (mounted && loading) {
+            console.log("⚠️ Force stopping loading screen (Timeout)");
+            setLoading(false); 
+        }
+    }, 4000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user && !user) {
           await fetchProfile(session.user.id, session.user.email);

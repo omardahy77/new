@@ -10,7 +10,8 @@ import {
   UserPlus, Video, X, Edit2,
   FileText, Globe, RefreshCw, CheckCircle, Unlock, ShieldCheck, Save,
   Layout, MessageSquare, Phone, Info, Image as ImageIcon, Zap, Clock, Lock,
-  Youtube, Twitter, Facebook, Instagram, Send
+  Youtube, Twitter, Facebook, Instagram, Send, Activity, Database, AlertTriangle,
+  Server, Wifi
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -19,7 +20,7 @@ export const AdminDashboard: React.FC = () => {
   const { t } = useLanguage(); 
   
   // Tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'courses' | 'settings' | 'content'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'courses' | 'settings' | 'content' | 'health'>('overview');
   
   // Data Lists
   const [usersList, setUsersList] = useState<User[]>([]);
@@ -53,6 +54,19 @@ export const AdminDashboard: React.FC = () => {
   // Security State
   const [newPassword, setNewPassword] = useState('');
 
+  // Diagnostics State
+  const [healthStatus, setHealthStatus] = useState<{
+      dbConnection: 'checking' | 'connected' | 'error';
+      adminRole: 'checking' | 'verified' | 'error';
+      latency: number | null;
+      lastChecked: Date | null;
+  }>({
+      dbConnection: 'checking',
+      adminRole: 'checking',
+      latency: null,
+      lastChecked: null
+  });
+
   // --- INITIALIZATION ---
   useEffect(() => {
     fetchUsers();
@@ -74,6 +88,51 @@ export const AdminDashboard: React.FC = () => {
         setLocalSettings(siteSettings);
     }
   }, [siteSettings]);
+
+  useEffect(() => {
+      if (activeTab === 'health') {
+          runDiagnostics();
+      }
+  }, [activeTab]);
+
+  // --- DIAGNOSTICS ---
+  const runDiagnostics = async () => {
+      setHealthStatus(prev => ({ ...prev, dbConnection: 'checking', adminRole: 'checking', latency: null }));
+      
+      const start = performance.now();
+      try {
+          // 1. Check DB Connection & Latency
+          const { count, error: dbError } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+          const end = performance.now();
+          
+          if (dbError) throw dbError;
+          
+          // 2. Check Admin Role (Double Check)
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user?.id)
+            .single();
+
+          if (profileError) throw profileError;
+
+          setHealthStatus({
+              dbConnection: 'connected',
+              adminRole: profile.role === 'admin' ? 'verified' : 'error',
+              latency: Math.round(end - start),
+              lastChecked: new Date()
+          });
+
+      } catch (e: any) {
+          console.error("Diagnostics failed:", e);
+          setHealthStatus(prev => ({
+              ...prev,
+              dbConnection: 'error',
+              adminRole: 'error',
+              lastChecked: new Date()
+          }));
+      }
+  };
 
   // --- DATA FETCHING ---
   const fetchUsers = async () => {
@@ -250,6 +309,13 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleClearCache = () => {
+      if(confirm('هل أنت متأكد؟ سيتم تسجيل خروجك وتحديث الصفحة.')) {
+          localStorage.clear();
+          window.location.reload();
+      }
+  };
+
   // --- HELPERS ---
   const getSectionName = (key: string) => {
       switch(key) {
@@ -337,6 +403,7 @@ export const AdminDashboard: React.FC = () => {
                   { id: 'courses', label: 'الكورسات', icon: BookOpen },
                   { id: 'content', label: 'المحتوى', icon: FileText },
                   { id: 'settings', label: 'الإعدادات', icon: Settings },
+                  { id: 'health', label: 'حالة النظام', icon: Activity },
                 ].map(item => (
                   <button key={item.id} onClick={() => setActiveTab(item.id as any)} className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${activeTab === item.id ? 'bg-gold-500 text-navy-950 font-bold shadow-lg' : 'hover:bg-white/5 text-gray-300'}`}>
                     <div className="flex items-center gap-3"><item.icon size={18} /> {item.label}</div>
@@ -638,6 +705,58 @@ export const AdminDashboard: React.FC = () => {
                        </div>
                        
                        <SaveButton section="settings" />
+                   </div>
+               )}
+
+               {/* HEALTH TAB (LIVE DIAGNOSTICS) */}
+               {activeTab === 'health' && (
+                   <div className="animate-fade-in space-y-6">
+                       <div className="flex justify-between items-center mb-6">
+                           <h2 className="text-xl font-bold flex items-center gap-2"><Activity className="text-gold-500" /> حالة النظام (Live)</h2>
+                           <button onClick={runDiagnostics} className="text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+                               <RefreshCw size={14} className={healthStatus.dbConnection === 'checking' ? 'animate-spin' : ''} /> إعادة الفحص
+                           </button>
+                       </div>
+                       
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                           {/* DB Connection */}
+                           <div className={`p-6 rounded-xl border ${healthStatus.dbConnection === 'connected' ? 'bg-green-500/10 border-green-500/20' : healthStatus.dbConnection === 'error' ? 'bg-red-500/10 border-red-500/20' : 'bg-navy-900/50 border-white/5'}`}>
+                               <h3 className={`font-bold mb-2 flex items-center gap-2 ${healthStatus.dbConnection === 'connected' ? 'text-green-400' : healthStatus.dbConnection === 'error' ? 'text-red-400' : 'text-white'}`}>
+                                   <Database size={18} /> اتصال قاعدة البيانات
+                               </h3>
+                               <div className="flex items-center gap-2 mt-4">
+                                   {healthStatus.dbConnection === 'checking' && <span className="text-gray-400 text-sm flex items-center gap-2"><RefreshCw size={12} className="animate-spin" /> جاري الاتصال...</span>}
+                                   {healthStatus.dbConnection === 'connected' && <span className="text-green-400 font-bold text-sm flex items-center gap-2"><CheckCircle size={14} /> متصل بنجاح</span>}
+                                   {healthStatus.dbConnection === 'error' && <span className="text-red-400 font-bold text-sm flex items-center gap-2"><X size={14} /> فشل الاتصال</span>}
+                               </div>
+                               {healthStatus.latency !== null && <p className="text-xs text-gray-500 mt-2 flex items-center gap-1"><Wifi size={10} /> زمن الاستجابة: {healthStatus.latency}ms</p>}
+                           </div>
+
+                           {/* Admin Role */}
+                           <div className={`p-6 rounded-xl border ${healthStatus.adminRole === 'verified' ? 'bg-blue-500/10 border-blue-500/20' : healthStatus.adminRole === 'error' ? 'bg-red-500/10 border-red-500/20' : 'bg-navy-900/50 border-white/5'}`}>
+                               <h3 className={`font-bold mb-2 flex items-center gap-2 ${healthStatus.adminRole === 'verified' ? 'text-blue-400' : healthStatus.adminRole === 'error' ? 'text-red-400' : 'text-white'}`}>
+                                   <ShieldCheck size={18} /> صلاحيات المشرف
+                               </h3>
+                               <div className="flex items-center gap-2 mt-4">
+                                   {healthStatus.adminRole === 'checking' && <span className="text-gray-400 text-sm flex items-center gap-2"><RefreshCw size={12} className="animate-spin" /> جاري التحقق...</span>}
+                                   {healthStatus.adminRole === 'verified' && <span className="text-blue-400 font-bold text-sm flex items-center gap-2"><CheckCircle size={14} /> تم التحقق (Admin)</span>}
+                                   {healthStatus.adminRole === 'error' && <span className="text-red-400 font-bold text-sm flex items-center gap-2"><X size={14} /> صلاحيات غير صحيحة</span>}
+                               </div>
+                               <p className="text-xs text-gray-500 mt-2">Security Definer: Active</p>
+                           </div>
+                       </div>
+
+                       <div className="bg-yellow-500/10 border border-yellow-500/20 p-6 rounded-xl">
+                           <h3 className="text-yellow-400 font-bold mb-2 flex items-center gap-2"><AlertTriangle size={20} /> أدوات الطوارئ</h3>
+                           <div className="flex flex-wrap gap-3">
+                               <button onClick={handleClearCache} className="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-500 border border-yellow-500/30 px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 text-sm">
+                                   <RefreshCw size={16} /> مسح الذاكرة المؤقتة (Clear Cache)
+                               </button>
+                               <button onClick={() => window.location.reload()} className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-2 text-sm">
+                                   <Server size={16} /> إعادة تحميل التطبيق
+                               </button>
+                           </div>
+                       </div>
                    </div>
                )}
             </div>

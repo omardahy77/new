@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense, lazy } from 'react';
+import React, { useEffect, Suspense, lazy, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider } from './context/StoreProvider';
 import { useStore } from './context/StoreContext';
@@ -18,6 +18,7 @@ const Register = lazy(() => import('./pages/Register').then(module => ({ default
 const CourseDetail = lazy(() => import('./pages/CourseDetail').then(module => ({ default: module.CourseDetail })));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
 const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
+const NotFound = lazy(() => import('./pages/NotFound').then(module => ({ default: module.NotFound })));
 
 class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasError: boolean}> {
   constructor(props: {children: React.ReactNode}) {
@@ -56,17 +57,35 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   }
 }
 
-const LoadingScreen = () => (
-  <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-gold-500">
-    <div className="relative">
-        <div className="w-16 h-16 border-4 border-gold-500/20 border-t-gold-500 rounded-full animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-2 h-2 bg-gold-500 rounded-full"></div>
-        </div>
+const LoadingScreen = () => {
+  const [showReload, setShowReload] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowReload(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-gold-500">
+      <div className="relative">
+          <div className="w-16 h-16 border-4 border-gold-500/20 border-t-gold-500 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-2 h-2 bg-gold-500 rounded-full"></div>
+          </div>
+      </div>
+      <p className="text-lg font-bold mt-4 animate-pulse tracking-widest">SNIPER FX</p>
+      
+      {showReload && (
+        <button 
+          onClick={() => window.location.reload()} 
+          className="mt-8 text-sm text-gray-500 hover:text-white underline transition-colors"
+        >
+          Taking too long? Click to reload
+        </button>
+      )}
     </div>
-    <p className="text-lg font-bold mt-4 animate-pulse tracking-widest">SNIPER FX</p>
-  </div>
-);
+  );
+};
 
 const ProtectedRoute = ({ children, adminOnly = false }: { children: React.ReactElement, adminOnly?: boolean }) => {
   const { user, loading } = useStore();
@@ -135,7 +154,8 @@ const AppContent = () => {
             <Route path="/course/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            {/* 404 Route */}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
       </main>

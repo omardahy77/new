@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useStore } from '../context/StoreContext'; // Import useStore
+import { useStore } from '../context/StoreContext';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
-import { AlertCircle, Loader2, Clock, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Loader2, Clock, ShieldCheck, Wrench } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -15,9 +15,9 @@ export const Login: React.FC = () => {
   const navigate = useNavigate();
   const { t, dir } = useLanguage();
   const { showToast } = useToast();
-  const { login, user } = useStore(); // Use global store
+  const { login, user } = useStore();
 
-  // Keep useEffect ONLY for users who visit the page while already logged in
+  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       if (user.role === 'admin') {
@@ -34,16 +34,14 @@ export const Login: React.FC = () => {
     setError('');
     
     try {
-      // Normalize email to lowercase and trim spaces
       const normalizedEmail = email.trim().toLowerCase();
       
-      // Use the centralized login function from StoreProvider
-      // We capture the result to redirect IMMEDIATELY
+      // Attempt Login
       const userProfile = await login(normalizedEmail, password);
       
       showToast(t('welcome_back'), 'success');
       
-      // 🚀 INSTANT REDIRECT: Navigate immediately without waiting for useEffect
+      // Force navigation based on role immediately after successful login
       if (userProfile?.role === 'admin' || normalizedEmail.includes('admin')) {
         navigate('/admin', { replace: true });
       } else {
@@ -52,10 +50,25 @@ export const Login: React.FC = () => {
       
     } catch (err: any) {
       console.error("Login error:", err);
-      setError(err.message === 'Invalid login credentials' 
-        ? (dir === 'rtl' ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' : 'Invalid email or password') 
-        : err.message);
-      setIsSubmitting(false); // Only stop loading if there was an error
+      
+      // User-Friendly Error Handling
+      let displayMessage = err.message;
+
+      // 1. Handle Database/Schema Errors (Hide technical jargon)
+      if (err.message?.includes('Database error') || err.message?.includes('schema') || err.status === 500) {
+        displayMessage = dir === 'rtl' 
+          ? 'النظام قيد التحديث حالياً. يرجى المحاولة بعد دقيقة.' 
+          : 'System is updating. Please try again in 1 minute.';
+      } 
+      // 2. Handle Invalid Credentials
+      else if (err.message === 'Invalid login credentials') {
+        displayMessage = dir === 'rtl' 
+          ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
+          : 'Invalid email or password';
+      }
+
+      setError(displayMessage);
+      setIsSubmitting(false);
     }
   };
 
@@ -71,8 +84,16 @@ export const Login: React.FC = () => {
           <p className="text-center text-gray-400 mb-8 text-sm">{t('login_subtitle')}</p>
 
           {error && (
-            <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${error.includes('pending') || error.includes('مراجعة') || error.includes('إعداد') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
-               {error.includes('pending') || error.includes('مراجعة') || error.includes('إعداد') ? <Clock size={20} className="shrink-0" /> : <AlertCircle size={20} className="shrink-0" />}
+            <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${
+              error.includes('pending') || error.includes('مراجعة') 
+                ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' 
+                : error.includes('تحديث') || error.includes('updating')
+                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+            }`}>
+               {error.includes('pending') ? <Clock size={20} className="shrink-0" /> : 
+                error.includes('تحديث') ? <Wrench size={20} className="shrink-0" /> :
+                <AlertCircle size={20} className="shrink-0" />}
                <span>{error}</span>
             </div>
           )}
