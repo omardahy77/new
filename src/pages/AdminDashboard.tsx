@@ -27,6 +27,7 @@ export const AdminDashboard: React.FC = () => {
   const [coursesList, setCoursesList] = useState<Course[]>([]);
   const [enrollmentsList, setEnrollmentsList] = useState<Enrollment[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
   
   // Settings & Content
   const [localSettings, setLocalSettings] = useState<SiteSettings>(siteSettings);
@@ -137,12 +138,14 @@ export const AdminDashboard: React.FC = () => {
   // --- DATA FETCHING ---
   const fetchUsers = async () => {
     setLoadingUsers(true);
+    setDataError(null);
     try {
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         if (error) throw error;
         if (data) setUsersList(data as User[]);
     } catch (e: any) {
         console.error("Error fetching users:", e);
+        setDataError(e.message);
         showToast(`فشل تحميل الأعضاء: ${e.message}`, 'error');
     } finally {
         setLoadingUsers(false);
@@ -418,6 +421,18 @@ export const AdminDashboard: React.FC = () => {
           <div className="lg:col-span-9">
             <div className="glass-card p-6 min-h-[600px]">
                
+               {/* DATA ERROR ALERT */}
+               {dataError && (
+                 <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 flex items-center gap-3">
+                    <AlertTriangle size={24} />
+                    <div>
+                        <p className="font-bold">حدث خطأ أثناء جلب البيانات</p>
+                        <p className="text-sm">{dataError}</p>
+                    </div>
+                    <button onClick={fetchUsers} className="mr-auto bg-red-500/20 px-3 py-1 rounded-lg text-sm hover:bg-red-500/30">إعادة المحاولة</button>
+                 </div>
+               )}
+
                {/* OVERVIEW TAB */}
                {activeTab === 'overview' && (
                  <div className="space-y-8 animate-fade-in">
