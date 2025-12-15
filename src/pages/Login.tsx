@@ -4,7 +4,7 @@ import { useStore } from '../context/StoreContext';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
-import { AlertCircle, Loader2, Clock, ShieldCheck, Wrench } from 'lucide-react';
+import { AlertCircle, Loader2, Clock, ShieldCheck, Wrench, CheckCircle } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -54,17 +54,16 @@ export const Login: React.FC = () => {
       // User-Friendly Error Handling
       let displayMessage = err.message;
 
-      // 1. Handle Database/Schema Errors (Hide technical jargon)
-      if (err.message?.includes('Database error') || err.message?.includes('schema') || err.status === 500) {
-        displayMessage = dir === 'rtl' 
-          ? 'النظام قيد التحديث حالياً. يرجى المحاولة بعد دقيقة.' 
-          : 'System is updating. Please try again in 1 minute.';
-      } 
-      // 2. Handle Invalid Credentials
-      else if (err.message === 'Invalid login credentials') {
+      // Clean up error messages
+      if (err.message === 'Invalid login credentials') {
         displayMessage = dir === 'rtl' 
           ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
           : 'Invalid email or password';
+      } else if (err.status === 500) {
+        // Now that we fixed the DB, a 500 is a real error we should see
+        displayMessage = dir === 'rtl'
+          ? 'خطأ في الاتصال بقاعدة البيانات (500). يرجى المحاولة مرة أخرى.'
+          : 'Database connection error (500). Please try again.';
       }
 
       setError(displayMessage);
@@ -87,12 +86,9 @@ export const Login: React.FC = () => {
             <div className={`p-4 rounded-xl mb-6 text-sm font-bold flex items-start gap-3 ${
               error.includes('pending') || error.includes('مراجعة') 
                 ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' 
-                : error.includes('تحديث') || error.includes('updating')
-                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
                 : 'bg-red-500/10 text-red-400 border border-red-500/20'
             }`}>
                {error.includes('pending') ? <Clock size={20} className="shrink-0" /> : 
-                error.includes('تحديث') ? <Wrench size={20} className="shrink-0" /> :
                 <AlertCircle size={20} className="shrink-0" />}
                <span>{error}</span>
             </div>
@@ -101,11 +97,11 @@ export const Login: React.FC = () => {
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label className="block text-sm font-bold text-gray-300 mb-2">{t('email')}</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 outline-none focus:border-gold-500 transition-colors text-white text-left" dir="ltr" />
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 outline-none focus:border-gold-500 transition-colors text-white text-left" dir="ltr" placeholder="name@example.com" />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-300 mb-2">{t('password')}</label>
-              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none transition-colors text-white text-left" dir="ltr" />
+              <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-[#020617] border border-white/10 rounded-xl p-4 focus:border-gold-500 outline-none transition-colors text-white text-left" dir="ltr" placeholder="••••••••" />
             </div>
             <button type="submit" disabled={isSubmitting} className="w-full bg-gold-500 hover:bg-gold-400 text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg flex items-center justify-center gap-2">
               {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (

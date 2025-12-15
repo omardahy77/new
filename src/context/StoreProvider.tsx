@@ -4,10 +4,11 @@ import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types
 import { StoreContext } from './StoreContext';
 import { translations } from '../utils/translations';
 
-// VERSION CONTROL: Bumped to PLATINUM to force fresh cache and logic
-const APP_VERSION = '3.0.0-PLATINUM'; 
+// VERSION CONTROL: FRESH START V7
+// This forces a complete system refresh
+const APP_VERSION = '7.0.1-RLS-FIX'; 
 
-// Default Settings (Preserved)
+// Default Settings (Fallback)
 const defaultSettings: SiteSettings = {
   site_name: "Sniper FX Gold",
   site_name_en: "Sniper FX Gold",
@@ -49,60 +50,7 @@ const defaultSettings: SiteSettings = {
     social_twitter_visible: true,
     social_whatsapp_visible: true
   },
-  content_config: {
-    hero_title_line1: translations.ar.hero_line1_default,
-    hero_title_line1_en: translations.en.hero_line1_default,
-    hero_title_line2: translations.ar.hero_line2_default,
-    hero_title_line2_en: translations.en.hero_line2_default,
-    hero_desc: translations.ar.hero_desc_default,
-    hero_desc_en: translations.en.hero_desc_default,
-    
-    why_choose_us_title: translations.ar.why_choose_us_title_default,
-    why_choose_us_title_en: translations.en.why_choose_us_title_default,
-    why_choose_us_desc: translations.ar.why_choose_us_desc_default,
-    why_choose_us_desc_en: translations.en.why_choose_us_desc_default,
-    
-    cta_title: translations.ar.cta_title_default,
-    cta_title_en: translations.en.cta_title_default,
-    cta_desc: translations.ar.cta_desc_default,
-    cta_desc_en: translations.en.cta_desc_default,
-    
-    coming_soon_title: translations.ar.coming_soon_title_default,
-    coming_soon_title_en: translations.en.coming_soon_title_default,
-    coming_soon_desc: translations.ar.coming_soon_desc_default,
-    coming_soon_desc_en: translations.en.coming_soon_desc_default,
-    coming_soon_badge: translations.ar.coming_soon_badge_default,
-    coming_soon_badge_en: translations.en.coming_soon_badge_default,
-    coming_soon_feature_1: "محتوى حصري",
-    coming_soon_feature_1_en: "Exclusive Content",
-    coming_soon_feature_2: "استراتيجيات متقدمة",
-    coming_soon_feature_2_en: "Advanced Strategies",
-
-    about_main_title: translations.ar.about_main_title_default,
-    about_main_title_en: translations.en.about_main_title_default,
-    about_main_desc: translations.ar.about_main_desc_default,
-    about_main_desc_en: translations.en.about_main_desc_default,
-    
-    mission_title: translations.ar.mission_title_default,
-    mission_title_en: translations.en.mission_title_default,
-    mission_desc: translations.ar.mission_desc_default,
-    mission_desc_en: translations.en.mission_desc_default,
-    
-    vision_title: translations.ar.vision_title_default,
-    vision_title_en: translations.en.vision_title_default,
-    vision_desc: translations.ar.vision_desc_default,
-    vision_desc_en: translations.en.vision_desc_default,
-    
-    contact_main_title: translations.ar.contact_main_title_default,
-    contact_main_title_en: translations.en.contact_main_title_default,
-    contact_main_desc: translations.ar.contact_main_desc_default,
-    contact_main_desc_en: translations.en.contact_main_desc_default,
-    
-    footer_tagline: translations.ar.platform_tagline,
-    footer_tagline_en: translations.en.platform_tagline,
-    footer_sub_tagline: "تعليم حقيقي. نتائج حقيقية.",
-    footer_sub_tagline_en: "Real Education. Real Results."
-  }
+  content_config: {}
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -113,7 +61,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(true);
 
-  // --- ROBUST PROFILE FETCHING & SELF-HEALING ---
+  // --- ROBUST PROFILE FETCHING ---
   const fetchProfile = async (userId: string, userEmail?: string) => {
     try {
       // 1. Try to fetch profile from DB
@@ -123,8 +71,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .eq('id', userId)
         .maybeSingle();
       
-      // 2. SELF-HEALING: If profile is missing, CREATE IT IMMEDIATELY
+      // 2. SELF-HEALING: If profile is missing (e.g. after DB reset), CREATE IT
       if (!data && userEmail) {
+         console.log('🔧 Self-Healing: Creating missing profile for', userEmail);
          const isMasterAdmin = userEmail === 'admin@sniperfx.com';
          
          const newProfile = {
@@ -132,7 +81,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
              email: userEmail,
              full_name: userEmail.split('@')[0] || 'User',
              role: isMasterAdmin ? 'admin' : 'student',
-             status: 'active'
+             status: isMasterAdmin ? 'active' : 'pending'
          };
 
          // Try INSERT
@@ -142,22 +91,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             .select()
             .single();
             
-         if (createError) {
-             // FALLBACK: Use memory-only profile
-             data = newProfile as any;
-         } else {
+         if (!createError) {
              data = createdProfile;
+         } else {
+             // Fallback to memory if insert fails (rare)
+             console.warn('⚠️ Self-Healing Insert Failed:', createError.message);
+             data = newProfile as any;
          }
-      }
-
-      // 3. MASTER ADMIN OVERRIDE (Memory Level Safety)
-      if (userEmail === 'admin@sniperfx.com' && data) {
-          if (data.role !== 'admin') {
-              data.role = 'admin';
-              data.status = 'active';
-              // Try to fix DB in background
-              supabase.from('profiles').update({ role: 'admin', status: 'active' }).eq('id', userId).then();
-          }
       }
 
       if (data) {
@@ -177,34 +117,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // 1. Attempt Supabase Login
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       
-      // 2. ERROR HANDLING STRATEGY: "BYPASS IF SESSION EXISTS"
-      if (error) {
-        // If it's a 500 (DB Trigger) or ANY error, check if we actually got a session.
-        // Supabase Auth service often issues the token even if the Postgres trigger fails.
-        const { data: sessionData } = await supabase.auth.getSession();
-        
-        if (sessionData.session?.user) {
-           // SUCCESS! Ignore the error completely.
-           return await fetchProfile(sessionData.session.user.id, sessionData.session.user.email);
-        }
-        
-        // If no session, then it's a real error (wrong password, etc.)
-        throw error;
-      }
+      if (error) throw error;
       
       if (data.user) {
           return await fetchProfile(data.user.id, data.user.email);
       }
       return null;
     } catch (err: any) {
-      // 3. FINAL SAFETY NET
-      // Before giving up, check session one last time.
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session?.user) {
-          return await fetchProfile(sessionData.session.user.id, sessionData.session.user.email);
-      }
-      
-      // If we are here, login TRULY failed.
       throw err;
     }
   };
