@@ -1,32 +1,50 @@
-# Sniper FX Gold Platform
+# Sniper FX Gold - Ultimate Edition 🏆
 
-منصة تعليمية متكاملة لتداول الفوركس والذهب، مبنية بأحدث التقنيات لضمان السرعة والأداء.
+The #1 Arab platform for professional Gold & Forex trading education. 
+**Version 4.0.0 (Ultimate Rebuild)**
 
-## 🚀 المميزات الجديدة
-- **لوحة تحكم شاملة (CMS)**: تحكم كامل في الكورسات، الدروس، الأعضاء، وإعدادات الموقع (النصوص والصور).
-- **مشغل فيديو ذكي**: يدعم يوتيوب، فيميو، جوجل درايف، والروابط المباشرة مع حماية من الإعلانات المزعجة.
-- **نظام حماية المحتوى**: الكورسات المدفوعة لا تفتح إلا للمشتركين المعتمدين.
-- **أداء عالي**: استخدام Lazy Loading وتقنيات التخزين المؤقت لسرعة تصفح فائقة.
+## 🌟 System Status: **OPERATIONAL**
+- **Architecture**: Single-Page Application (SPA) with React & Supabase.
+- **Database**: PostgreSQL with Row Level Security (RLS).
+- **Security**: Strict Role-Based Access Control (RBAC).
 
-## 🔑 بيانات دخول المشرف (Admin)
-- **البريد الإلكتروني**: `admin@sniperfx.com`
-- **كلمة المرور**: `Hamza0100@`
+## 🚀 Key Features (Ultimate Edition)
 
-## 🛠️ التشغيل والتطوير
-1. تثبيت المكتبات:
-\`\`\`bash
+### 1. Advanced Course Management
+- **Free Courses**: Visible to all registered users.
+- **Paid (VIP) Courses**: **Hidden** from students by default. Only visible after manual enrollment by Admin.
+- **Content Protection**: Video links and lesson details are secured.
+
+### 2. Super Admin Dashboard
+- **CMS**: Edit website text (Hero, About, Contact) directly from the dashboard.
+- **User Management**: Search users, approve accounts, and **Enroll** them in paid courses.
+- **Course Builder**: Create/Edit courses and toggle "Is Paid" status.
+
+### 3. Student Experience
+- **My Learning**: Dedicated section for enrolled courses.
+- **Progress Tracking**: Auto-save video progress.
+- **Responsive Player**: Custom video player with subtitle support.
+
+## 🛠️ Quick Start
+
+### 1. Installation
+```bash
 yarn install
-\`\`\`
+```
 
-2. تشغيل السيرفر المحلي:
-\`\`\`bash
+### 2. Development
+```bash
 yarn run dev
-\`\`\`
+```
 
-3. بناء المشروع للنشر:
-\`\`\`bash
-yarn build
-\`\`\`
+### 3. Admin Credentials
+- **User**: `admin@sniperfx.com`
+- **Pass**: `Hamza0100@`
 
-## 📦 النشر (Deployment)
-المشروع جاهز للنشر على **Netlify**. تم إضافة ملف `_redirects` لضمان عمل الروابط بشكل صحيح.
+## 📂 Project Structure
+- `/src/pages/AdminDashboard.tsx`: The command center.
+- `/src/context/StoreProvider.tsx`: Handles the logic for hiding/showing paid courses.
+- `/supabase/migrations`: Database schema definitions.
+
+## 📄 License
+Private Property of Sniper FX Gold.

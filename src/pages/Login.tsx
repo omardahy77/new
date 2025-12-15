@@ -4,7 +4,7 @@ import { useStore } from '../context/StoreContext';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
-import { AlertCircle, Loader2, Clock, ShieldCheck, Wrench, CheckCircle } from 'lucide-react';
+import { AlertCircle, Loader2, Clock, ShieldCheck, Database, Terminal } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -54,16 +54,20 @@ export const Login: React.FC = () => {
       // User-Friendly Error Handling
       let displayMessage = err.message;
 
-      // Clean up error messages
+      // Handle specific error codes
       if (err.message === 'Invalid login credentials') {
         displayMessage = dir === 'rtl' 
           ? 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
           : 'Invalid email or password';
-      } else if (err.status === 500) {
-        // Now that we fixed the DB, a 500 is a real error we should see
+      } else if (err.status === 500 || err.message.includes('Database error') || err.message.includes('querying schema')) {
+        // Specific handling for the 500 Schema Error
         displayMessage = dir === 'rtl'
-          ? 'خطأ في الاتصال بقاعدة البيانات (500). يرجى المحاولة مرة أخرى.'
-          : 'Database connection error (500). Please try again.';
+          ? 'خطأ في قاعدة البيانات (500). يرجى تشغيل ملف SQL للإصلاح في لوحة التحكم.'
+          : 'Database Error (500). Please run the "fix_permissions" SQL in Supabase Dashboard.';
+      } else if (err.message.includes('Email not confirmed')) {
+        displayMessage = dir === 'rtl'
+          ? 'البريد الإلكتروني غير مؤكد. يرجى التحقق من بريدك.'
+          : 'Email not confirmed. Please check your inbox.';
       }
 
       setError(displayMessage);
@@ -89,8 +93,16 @@ export const Login: React.FC = () => {
                 : 'bg-red-500/10 text-red-400 border border-red-500/20'
             }`}>
                {error.includes('pending') ? <Clock size={20} className="shrink-0" /> : 
+                error.includes('Database') || error.includes('قاعدة البيانات') ? <Database size={20} className="shrink-0" /> :
                 <AlertCircle size={20} className="shrink-0" />}
-               <span>{error}</span>
+               <div className="flex flex-col gap-1">
+                 <span>{error}</span>
+                 {(error.includes('Database') || error.includes('500')) && (
+                   <span className="text-xs font-normal opacity-80 flex items-center gap-1">
+                     <Terminal size={12} /> Run `fix_permissions_and_recursion.sql`
+                   </span>
+                 )}
+               </div>
             </div>
           )}
 

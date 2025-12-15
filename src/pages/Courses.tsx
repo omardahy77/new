@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { formatDuration } from '../utils/videoHelpers';
 import { Play, Star, Clock, BookOpen, Crown, Lock, BarChart3 } from 'lucide-react';
 
-// Skeleton Component
 const CourseCardSkeleton = () => (
   <div className="glass-card h-full flex flex-col overflow-hidden bg-[#080b14]/60 animate-pulse">
     <div className="h-64 lg:h-auto lg:w-1/3 bg-navy-800/50 w-full"></div>
@@ -26,7 +25,7 @@ const CourseCardSkeleton = () => (
 );
 
 export const Courses: React.FC = () => {
-  const { courses, user, checkAccess, siteSettings, coursesLoading } = useStore();
+  const { courses, user, checkAccess, siteSettings, coursesLoading, enrollments } = useStore();
   const { t, language, dir } = useLanguage();
   const navigate = useNavigate();
   const content = siteSettings.content_config || {};
@@ -55,7 +54,22 @@ export const Courses: React.FC = () => {
     return level;
   };
 
-  const visibleCourses = user ? courses : courses.filter(c => !c.is_paid);
+  // --- VISIBILITY LOGIC (THE KEY FEATURE) ---
+  // 1. Admin sees everything.
+  // 2. Free courses are visible to everyone.
+  // 3. Paid courses are ONLY visible if the user is ENROLLED.
+  const visibleCourses = courses.filter(course => {
+      if (user?.role === 'admin') return true; // Admin sees all
+      if (!course.is_paid) return true; // Free courses visible to all
+      
+      // Paid Course Logic:
+      // Must be logged in AND enrolled to see it in the list
+      if (user && enrollments.some(e => e.course_id === course.id)) {
+          return true;
+      }
+      return false; // Hide otherwise
+  });
+
   const showComingSoon = user && (siteSettings.features_config?.show_coming_soon ?? true);
 
   return (
@@ -134,7 +148,6 @@ export const Courses: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500">
                             <div className="flex items-center gap-2">
                             <Clock size={16} className="text-gold-500" />
-                            {/* STRICTLY FORMATTED DURATION */}
                             <span>{formatDuration(course.duration, language)}</span>
                             </div>
                             <div className="flex items-center gap-2">
@@ -167,25 +180,6 @@ export const Courses: React.FC = () => {
                 </div>
                 );
             })
-          )}
-
-          {/* Coming Soon Card (Same as before) */}
-          {showComingSoon && (
-             <div className="glass-card border-gold-500/10 p-12 flex flex-col items-center justify-center text-center min-h-[300px] relative overflow-hidden group">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03]"></div>
-                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-navy-900/80"></div>
-                
-                <div className="relative z-10">
-                  <div className="w-20 h-20 rounded-full bg-navy-900 border border-gold-500/20 flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,215,0,0.05)] group-hover:scale-110 transition-transform duration-500 mx-auto">
-                    <Lock className="text-gold-500/50 group-hover:text-gold-500 transition-colors" size={32} />
-                  </div>
-                  <h3 className="text-2xl font-bold text-white mb-2">{getContent('coming_soon_title') || t('coming_soon_title_default')}</h3>
-                  <p className="text-gray-500 text-sm mb-6 max-w-xs mx-auto">{getContent('coming_soon_desc') || t('coming_soon_desc_default')}</p>
-                  <span className="px-4 py-1.5 bg-gold-500/5 border border-gold-500/10 rounded-lg text-xs text-gold-500/70 font-bold uppercase tracking-wider">
-                    {getContent('coming_soon_badge') || t('coming_soon_badge_default')}
-                  </span>
-                </div>
-              </div>
           )}
         </div>
       </div>

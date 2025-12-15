@@ -4,9 +4,9 @@ import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types
 import { StoreContext } from './StoreContext';
 import { translations } from '../utils/translations';
 
-// VERSION CONTROL: FRESH START V7
+// VERSION CONTROL: FRESH START V8
 // This forces a complete system refresh
-const APP_VERSION = '7.0.1-RLS-FIX'; 
+const APP_VERSION = '8.0.0-DB-FIX'; 
 
 // Default Settings (Fallback)
 const defaultSettings: SiteSettings = {
