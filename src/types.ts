@@ -31,6 +31,7 @@ export interface Lesson {
   order: number;
   duration: string;
   is_published?: boolean;
+  subtitles?: Subtitle[];
 }
 
 export interface Subtitle {
@@ -88,7 +89,7 @@ export interface SiteSettings {
     social_twitter_visible?: boolean;
   };
   
-  // Legacy Fields
+  // Legacy Fields (Kept for compatibility, but prefer content_config)
   hero_title_line1?: string;
   hero_title_line2?: string;
   hero_desc?: string;

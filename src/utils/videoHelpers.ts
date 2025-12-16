@@ -19,7 +19,18 @@ export const processVideoUrl = (input: string) => {
     };
   }
 
-  // 2. DETECT REACT PLAYER SUPPORTED URLS
+  // 2. DETECT GOOGLE DRIVE
+  if (cleanInput.includes('drive.google.com')) {
+    // Convert view links to preview links for better embedding
+    const previewUrl = cleanInput.replace('/view', '/preview');
+    return {
+      url: previewUrl,
+      type: 'iframe', // Google Drive works best as iframe
+      isEmbed: false
+    };
+  }
+
+  // 3. DETECT REACT PLAYER SUPPORTED URLS (YouTube, Vimeo, Files)
   if (ReactPlayer.canPlay(cleanInput)) {
     return { 
       url: cleanInput, 
@@ -28,7 +39,7 @@ export const processVideoUrl = (input: string) => {
     };
   }
 
-  // 3. FALLBACK: GENERIC URL (Force Iframe)
+  // 4. FALLBACK: GENERIC URL (Force Iframe)
   return { 
     url: cleanInput, 
     type: 'iframe', 

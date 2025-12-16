@@ -18,7 +18,7 @@ export const translations = {
     loading: 'جاري التحميل...',
     maintenance_title: 'الموقع تحت الصيانة',
     maintenance_desc: 'نقوم حالياً بإجراء تحسينات هامة لتقديم تجربة تداول أفضل.',
-    rights_reserved: 'All Rights Reserved', // Keep English as requested
+    rights_reserved: 'All Rights Reserved',
     
     // Home
     welcome_back: 'مرحباً بك،',
@@ -38,14 +38,17 @@ export const translations = {
     watch_now: 'مشاهدة الآن',
     login_to_access: 'سجل للدخول',
     
+    // CTA Section (New)
+    cta_title_default: 'جاهز للبدء؟',
+    cta_desc_default: 'انضم لمجتمع Sniper FX Gold الآن وابدأ رحلة النجاح.',
+    cta_btn_default: 'إنشاء حساب جديد',
+
     // Defaults (Fallbacks)
     hero_line1_default: 'تداول بذكاء',
     hero_line2_default: 'بدقة القناص',
     hero_desc_default: 'اكتشف أسرار صناعة السوق والمؤسسات المالية... نظام تعليمي متكامل ومحمي يأخذك من الصفر إلى الاحتراف.',
     why_choose_us_title_default: 'لماذا تختارنا؟',
     why_choose_us_desc_default: 'نقدم تجربة تعليمية متكاملة تجمع بين النظرية والتطبيق.',
-    cta_title_default: 'جاهز للبدء؟',
-    cta_desc_default: 'انضم لمجتمع Sniper FX Gold الآن وابدأ رحلة النجاح.',
     coming_soon_title_default: 'Master Class Pro',
     coming_soon_desc_default: 'كورس احترافي متقدم يكشف أسرار صناع السوق.',
     coming_soon_badge_default: 'قريباً',
@@ -58,6 +61,11 @@ export const translations = {
     contact_main_title_default: 'تواصل معنا',
     contact_main_desc_default: 'فريق الدعم جاهز للإجابة على استفساراتكم.',
     
+    // Footer
+    footer_tagline_default: 'المنصة العربية الأولى لاحتراف الذهب',
+    footer_sub_tagline_default: 'تعليم حقيقي. نتائج حقيقية.',
+    footer_contact_title: 'تواصل معنا',
+
     // Courses
     start_watching: 'ابدأ المشاهدة',
     login_to_watch: 'سجل للدخول',
@@ -157,14 +165,17 @@ export const translations = {
     watch_now: 'Watch Now',
     login_to_access: 'Login to Access',
     
+    // CTA Section
+    cta_title_default: 'Ready to Start?',
+    cta_desc_default: 'Join the Sniper FX Gold community now and start your journey to success.',
+    cta_btn_default: 'Create New Account',
+
     // Defaults
     hero_line1_default: 'Trade Smart',
     hero_line2_default: 'With Sniper Precision',
     hero_desc_default: 'Discover the secrets of market making... A complete, secure LMS taking you from zero to hero.',
     why_choose_us_title_default: 'Why Choose Us?',
     why_choose_us_desc_default: 'We provide a complete educational experience.',
-    cta_title_default: 'Ready to Start?',
-    cta_desc_default: 'Join Sniper FX Gold community now.',
     coming_soon_title_default: 'Master Class Pro',
     coming_soon_desc_default: 'Advanced professional course revealing market maker secrets.',
     coming_soon_badge_default: 'Coming Soon',
@@ -176,6 +187,11 @@ export const translations = {
     vision_desc_default: 'To be the #1 trusted reference for traders.',
     contact_main_title_default: 'Contact Us',
     contact_main_desc_default: 'Our support team is ready to answer your queries.',
+    
+    // Footer
+    footer_tagline_default: 'The #1 Platform for Gold Trading Mastery',
+    footer_sub_tagline_default: 'Real Education. Real Results.',
+    footer_contact_title: 'Contact Us',
 
     // Courses
     start_watching: 'Start Watching',

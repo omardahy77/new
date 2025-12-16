@@ -7,11 +7,10 @@
     color-scheme: dark;
   }
   
-  /* Font Optimization: Swap ensures text is visible immediately */
   @font-face {
     font-family: 'Cairo';
     font-style: normal;
-    font-weight: 200 900;
+    font-weight: 200 1000;
     font-display: swap;
     src: url(https://fonts.gstatic.com/s/cairo/v28/SLXGc1nY6HkvangtZmpQdkhzfH5lkSs2SgRjCAGMQ1z0hGC-aA.woff2) format('woff2');
   }
@@ -27,6 +26,7 @@
     overflow-x: hidden;
   }
 
+  /* Noise Overlay */
   body::before {
     content: "";
     position: fixed;
@@ -70,8 +70,22 @@
     filter: drop-shadow(0 0 20px rgba(255, 215, 0, 0.3));
   }
 
+  /* --- EXACT HERO STYLING MATCHING IMAGE --- */
+  
+  /* Top Line: White with subtle shadow */
+  .hero-text-white {
+    color: #FFFFFF;
+    text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); /* Darker shadow for better contrast */
+  }
+  
+  /* Bottom Line: Gold with SOFTER Glow (Reduced Intensity) */
+  .hero-text-gold {
+    color: #FFD700;
+    text-shadow: 0 0 30px rgba(255, 215, 0, 0.35); /* Single, cleaner glow */
+  }
+
   .btn-gold {
-    @apply bg-gradient-to-r from-[#FFC400] to-[#FFD700] text-navy-950 font-bold rounded-xl transition-all duration-300 hover:to-[#FFE066] hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(255,215,0,0.25)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-[#FFD700] text-black font-bold rounded-xl transition-all duration-300 hover:bg-[#FFE066] hover:-translate-y-0.5 hover:shadow-[0_10px_20px_rgba(255,215,0,0.25)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
   }
 
   .btn-glass {
@@ -110,7 +124,6 @@
   @apply bg-[#162032] rounded-full hover:bg-gold-600/50 transition-colors;
 }
 
-/* Shake Animation for Errors */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }
