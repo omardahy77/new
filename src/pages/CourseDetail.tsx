@@ -5,21 +5,44 @@ import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { Lesson, Course, LessonProgress } from '../types';
 import { VideoPlayer } from '../components/VideoPlayer';
+import { DEFAULT_LESSONS_MAP } from '../constants';
 import { 
   Lock, PlayCircle, ChevronRight, ChevronLeft, Menu, X, 
-  CheckCircle, MonitorPlay, CheckCircle2, Play
+  CheckCircle, MonitorPlay, CheckCircle2, Play, AlertCircle
 } from 'lucide-react';
 
 export const CourseDetail: React.FC = () => {
   const { id } = useParams();
-  const { checkAccess, user } = useStore();
+  const { checkAccess, user, courses } = useStore(); 
   const { t, dir } = useLanguage();
   const navigate = useNavigate();
   
-  const [course, setCourse] = useState<Course | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
+  // 1. INSTANT LOAD: Try to find course in global store first
+  const [course, setCourse] = useState<Course | null>(() => {
+    return courses.find(c => c.id === id) || null;
+  });
+
+  // 2. LESSON CACHING & FALLBACK
+  const [lessons, setLessons] = useState<Lesson[]>(() => {
+    if (!id) return [];
+    
+    // A. Check for Default Content (Instant)
+    if (id.startsWith('default-') && DEFAULT_LESSONS_MAP[id]) {
+        return DEFAULT_LESSONS_MAP[id];
+    }
+
+    // B. Check Session Cache
+    try {
+        const cached = sessionStorage.getItem(`sniper_lessons_${id}`);
+        return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+
   const [activeLesson, setActiveLesson] = useState<Lesson | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // Only show loading if we have absolutely NO data
+  const [loading, setLoading] = useState(!course || (lessons.length === 0 && !id?.startsWith('default-')));
+  
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [progressMap, setProgressMap] = useState<Record<string, LessonProgress>>({});
 
@@ -34,11 +57,23 @@ export const CourseDetail: React.FC = () => {
 
   useEffect(() => {
     if (!id) return;
+
+    // If it's a default course, we already loaded data in useState, so just stop loading
+    if (id.startsWith('default-')) {
+        setLoading(false);
+        if (lessons.length > 0 && !activeLesson) setActiveLesson(lessons[0]);
+        return;
+    }
+
     const fetchData = async () => {
       try {
-        const { data: courseData } = await supabase.from('courses').select('*').eq('id', id).single();
-        setCourse(courseData);
+        // Fetch Course if missing
+        if (!course) {
+            const { data: courseData } = await supabase.from('courses').select('*').eq('id', id).single();
+            if (courseData) setCourse(courseData);
+        }
 
+        // Fetch Lessons (Always fetch fresh in background to update cache)
         const { data: lessonsData } = await supabase
           .from('lessons')
           .select('*, subtitles:lesson_subtitles(*)')
@@ -48,9 +83,20 @@ export const CourseDetail: React.FC = () => {
         
         if (lessonsData && lessonsData.length > 0) {
           setLessons(lessonsData);
-          setActiveLesson(lessonsData[0]);
+          sessionStorage.setItem(`sniper_lessons_${id}`, JSON.stringify(lessonsData)); // Update Cache
+          
+          // If no active lesson, set first one
+          if (!activeLesson) {
+            setActiveLesson(lessonsData[0]);
+          }
+        } else if (lessons.length === 0) {
+            // If DB returns empty and we have no cache, try to use default map as last resort fallback
+            // This handles cases where DB might be wiped but we want to show something
+             const fallback = DEFAULT_LESSONS_MAP["default-1"]; // Fallback to basic lessons
+             if (fallback) setLessons(fallback);
         }
 
+        // Fetch Progress
         if (user) {
             const { data: progressData } = await supabase.from('lesson_progress').select('*').eq('user_id', user.id);
             const pMap: Record<string, LessonProgress> = {};
@@ -58,7 +104,7 @@ export const CourseDetail: React.FC = () => {
             setProgressMap(pMap);
         }
       } catch (error) {
-        console.error("Error fetching course:", error);
+        console.error("Error fetching course data:", error);
       } finally {
         setLoading(false);
       }
@@ -66,6 +112,14 @@ export const CourseDetail: React.FC = () => {
     fetchData();
   }, [id, user]);
 
+  // Set active lesson from cache if available and not set
+  useEffect(() => {
+    if (!activeLesson && lessons.length > 0) {
+        setActiveLesson(lessons[0]);
+    }
+  }, [lessons]);
+
+  // Real-time progress updates
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -98,20 +152,13 @@ export const CourseDetail: React.FC = () => {
   const totalLessons = lessons.length;
   const progressPercentage = totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-navy-950 text-gold-500">{t('loading')}</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-navy-950 text-gold-500 font-bold text-xl animate-pulse">{t('loading')}</div>;
   if (!course) return <div className="min-h-screen flex items-center justify-center text-white">Course not found</div>;
-  if (!user) { navigate('/register'); return null; }
+  
+  // NOTE: We allow viewing the page even if not logged in, but lock the player
+  // This lets users see the lesson list (Marketing)
 
-  if (!checkAccess(course)) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-navy-950 text-center p-4 pt-[120px]">
-        <Lock size={48} className="text-gold-500 mb-4" />
-        <h2 className="text-2xl font-bold text-white mb-2">{t('locked_content')}</h2>
-        <p className="text-gray-400 mb-6">{t('must_subscribe')}</p>
-        <button onClick={() => navigate('/')} className="btn-gold px-8 py-3">{t('back_home')}</button>
-      </div>
-    );
-  }
+  const hasAccess = checkAccess(course);
 
   return (
     <div className="h-screen flex flex-col bg-navy-950 overflow-hidden font-cairo pt-[115px]" dir={dir}>
@@ -129,10 +176,12 @@ export const CourseDetail: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-4">
-           <div className="hidden md:flex items-center gap-2 text-xs font-bold bg-navy-800 text-gold-400 px-4 py-2 rounded-full border border-gold-500/10 shadow-inner">
-              <CheckCircle size={14} />
-              <span>{t('completed')}: {progressPercentage}%</span>
-           </div>
+           {user && (
+             <div className="hidden md:flex items-center gap-2 text-xs font-bold bg-navy-800 text-gold-400 px-4 py-2 rounded-full border border-gold-500/10 shadow-inner">
+                <CheckCircle size={14} />
+                <span>{t('completed')}: {progressPercentage}%</span>
+             </div>
+           )}
            <button onClick={() => setSidebarOpen(!sidebarOpen)} className={`p-2 rounded-lg transition-all duration-300 lg:hidden ${sidebarOpen ? 'bg-gold-500 text-navy-950' : 'bg-navy-800 text-white'}`}>
             <Menu size={20} />
           </button>
@@ -145,20 +194,31 @@ export const CourseDetail: React.FC = () => {
         {/* Player Area */}
         <main className="flex-1 flex flex-col overflow-y-auto custom-scrollbar relative w-full">
           <div className="w-full bg-black relative shadow-2xl shrink-0 aspect-video max-h-[75vh] border-b border-white/5 group">
-            {activeLesson ? (
-                <VideoPlayer 
-                    key={activeLesson.id}
-                    url={activeLesson.video_url} 
-                    lessonId={activeLesson.id!}
-                    subtitles={activeLesson.subtitles}
-                    onEnded={handleNextLesson}
-                />
-            ) : (
-                <div className="flex items-center justify-center h-full text-gray-500 bg-navy-900">
-                    <div className="text-center">
-                        <PlayCircle size={48} className="mx-auto mb-2 opacity-50" />
-                        <p>{t('select_lesson')}</p>
+            {hasAccess ? (
+                activeLesson ? (
+                    <VideoPlayer 
+                        key={activeLesson.id}
+                        url={activeLesson.video_url} 
+                        lessonId={activeLesson.id!}
+                        subtitles={activeLesson.subtitles}
+                        onEnded={handleNextLesson}
+                    />
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500 bg-navy-900">
+                        <div className="text-center">
+                            <PlayCircle size={48} className="mx-auto mb-2 opacity-50" />
+                            <p>{t('select_lesson')}</p>
+                        </div>
                     </div>
+                )
+            ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-navy-950/90 backdrop-blur-sm z-50">
+                    <Lock size={64} className="text-gold-500 mb-6 animate-pulse" />
+                    <h2 className="text-2xl font-bold text-white mb-2">{t('locked_content')}</h2>
+                    <p className="text-gray-400 mb-8 max-w-md text-center">{t('must_subscribe')}</p>
+                    <button onClick={() => navigate('/login')} className="btn-gold px-8 py-3 font-bold text-lg shadow-[0_0_20px_rgba(255,215,0,0.3)]">
+                        {t('login_to_watch')}
+                    </button>
                 </div>
             )}
           </div>
@@ -190,7 +250,7 @@ export const CourseDetail: React.FC = () => {
           </div>
         </main>
 
-        {/* Sidebar Playlist (Overlay on Mobile, Fixed on Desktop) */}
+        {/* Sidebar Playlist */}
         <aside className={`
             fixed lg:relative inset-y-0 ${dir === 'rtl' ? 'right-0' : 'left-0'} 
             w-80 bg-[#0C1220] border-l border-white/5 flex flex-col transition-transform duration-300 z-30 shadow-2xl
@@ -201,55 +261,66 @@ export const CourseDetail: React.FC = () => {
           
           <div className="p-6 border-b border-white/5 bg-[#0C1220] sticky top-0 z-10">
             <h3 className="font-bold text-white text-lg mb-2">{t('course_content')}</h3>
-            <div className="flex justify-between text-xs text-gray-400 mb-2">
-                <span>{t('general_progress')}</span>
-                <span>{completedCount} / {totalLessons}</span>
-            </div>
-            <div className="w-full bg-navy-950 h-2 rounded-full overflow-hidden border border-white/5">
-                <div className="h-full bg-gradient-to-r from-gold-600 to-gold-400 transition-all duration-500 shadow-[0_0_10px_rgba(255,215,0,0.3)]" style={{ width: `${progressPercentage}%` }}></div>
-            </div>
+            {user && (
+                <>
+                <div className="flex justify-between text-xs text-gray-400 mb-2">
+                    <span>{t('general_progress')}</span>
+                    <span>{completedCount} / {totalLessons}</span>
+                </div>
+                <div className="w-full bg-navy-950 h-2 rounded-full overflow-hidden border border-white/5">
+                    <div className="h-full bg-gradient-to-r from-gold-600 to-gold-400 transition-all duration-500 shadow-[0_0_10px_rgba(255,215,0,0.3)]" style={{ width: `${progressPercentage}%` }}></div>
+                </div>
+                </>
+            )}
           </div>
           
           <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 bg-[#080C15]">
-            {lessons.map((lesson, idx) => {
-              const isActive = activeLesson?.id === lesson.id;
-              const isCompleted = progressMap[lesson.id!]?.is_completed;
-              
-              return (
-                <button
-                  key={lesson.id}
-                  onClick={() => { setActiveLesson(lesson); if (window.innerWidth < 1024) setSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all ${dir === 'rtl' ? 'text-right' : 'text-left'} group border relative overflow-hidden ${
-                    isActive 
-                      ? 'bg-navy-800 border-gold-500/40 shadow-lg' 
-                      : 'bg-navy-900/40 border-white/5 hover:bg-navy-800 hover:border-white/10'
-                  }`}
-                >
-                  {isActive && <div className={`absolute ${dir === 'rtl' ? 'left-0' : 'right-0'} top-0 bottom-0 w-1 bg-gold-500`}></div>}
-                  
-                  <div className="relative shrink-0">
-                      {lesson.thumbnail_url ? (
-                          <div className={`w-16 h-10 rounded-lg overflow-hidden border ${isActive ? 'border-gold-500' : 'border-white/10'} shadow-sm`}>
-                              <img src={lesson.thumbnail_url} className="w-full h-full object-cover" />
-                          </div>
-                      ) : (
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${isActive ? 'bg-gold-500 text-navy-950' : isCompleted ? 'bg-green-500/20 text-green-500 border border-green-500/30' : 'bg-navy-950 text-gray-500 border border-white/10'}`}>
-                            {isActive ? <Play size={12} fill="currentColor" /> : isCompleted ? <CheckCircle2 size={14} /> : idx + 1}
-                          </div>
-                      )}
-                  </div>
-                  
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-bold mb-1 transition-colors line-clamp-1 ${isActive ? 'text-gold-400' : isCompleted ? 'text-gray-400' : 'text-gray-300 group-hover:text-white'}`}>
-                      {lesson.title}
-                    </p>
-                    <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono">
-                      <span>{lesson.duration}</span>
+            {lessons.length === 0 ? (
+                <div className="text-center py-10 px-4 text-gray-500">
+                    <AlertCircle className="mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">لا توجد دروس متاحة حالياً.</p>
+                </div>
+            ) : (
+                lessons.map((lesson, idx) => {
+                const isActive = activeLesson?.id === lesson.id;
+                const isCompleted = progressMap[lesson.id!]?.is_completed;
+                
+                return (
+                    <button
+                    key={lesson.id}
+                    onClick={() => { setActiveLesson(lesson); if (window.innerWidth < 1024) setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-all ${dir === 'rtl' ? 'text-right' : 'text-left'} group border relative overflow-hidden ${
+                        isActive 
+                        ? 'bg-navy-800 border-gold-500/40 shadow-lg' 
+                        : 'bg-navy-900/40 border-white/5 hover:bg-navy-800 hover:border-white/10'
+                    }`}
+                    >
+                    {isActive && <div className={`absolute ${dir === 'rtl' ? 'left-0' : 'right-0'} top-0 bottom-0 w-1 bg-gold-500`}></div>}
+                    
+                    <div className="relative shrink-0">
+                        {lesson.thumbnail_url ? (
+                            <div className={`w-16 h-10 rounded-lg overflow-hidden border ${isActive ? 'border-gold-500' : 'border-white/10'} shadow-sm`}>
+                                <img src={lesson.thumbnail_url} className="w-full h-full object-cover" />
+                            </div>
+                        ) : (
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors ${isActive ? 'bg-gold-500 text-navy-950' : isCompleted ? 'bg-green-500/20 text-green-500 border border-green-500/30' : 'bg-navy-950 text-gray-500 border border-white/10'}`}>
+                                {isActive ? <Play size={12} fill="currentColor" /> : isCompleted ? <CheckCircle2 size={14} /> : idx + 1}
+                            </div>
+                        )}
                     </div>
-                  </div>
-                </button>
-              );
-            })}
+                    
+                    <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-bold mb-1 transition-colors line-clamp-1 ${isActive ? 'text-gold-400' : isCompleted ? 'text-gray-400' : 'text-gray-300 group-hover:text-white'}`}>
+                        {lesson.title}
+                        </p>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono">
+                        <span>{lesson.duration}</span>
+                        </div>
+                    </div>
+                    </button>
+                );
+                })
+            )}
           </div>
         </aside>
       </div>

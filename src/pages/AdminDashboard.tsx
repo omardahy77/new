@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { useLanguage } from '../context/LanguageContext';
 import { supabase } from '../lib/supabase';
 import { User, Course, SiteSettings, Lesson } from '../types';
+import { translations } from '../utils/translations'; // Import defaults
 import { 
   LayoutDashboard, Users, BookOpen, Settings, Save, 
-  Plus, Trash2, CheckCircle, AlertTriangle, Eye, RefreshCw, Edit, Video, Clock, Image as ImageIcon,
-  ArrowLeft, Search, Loader2, X, Globe, MessageSquare, Shield, Activity
+  Plus, Trash2, CheckCircle, AlertTriangle, RefreshCw, Edit, Video, Clock, Image as ImageIcon,
+  ArrowLeft, Search, Loader2, X, Globe, MessageSquare, Shield, Activity, Share2, ToggleLeft, ToggleRight,
+  Database, Info, GraduationCap
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
-import { Link } from 'react-router-dom';
 
 // --- COMPONENTS ---
 
@@ -29,22 +31,29 @@ const Modal = ({ isOpen, onClose, title, children }: { isOpen: boolean; onClose:
 
 const LoadingSpinner = () => <Loader2 className="animate-spin" size={18} />;
 
-// --- MAIN DASHBOARD ---
+// --- CACHE KEYS ---
+const USERS_CACHE_KEY = 'sniper_admin_users_v1';
+const STATS_CACHE_KEY = 'sniper_admin_stats_v1';
+const LESSONS_CACHE_KEY_PREFIX = 'sniper_admin_lessons_';
 
 export const AdminDashboard: React.FC = () => {
-  const { user, siteSettings, refreshData, updateSettings } = useStore();
+  const { user, siteSettings, refreshData, updateSettings, courses } = useStore();
   const { showToast } = useToast();
   
   const [activeTab, setActiveTab] = useState<'cms' | 'courses' | 'users'>('cms');
   
   // CMS State
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(siteSettings);
-  const [cmsSection, setCmsSection] = useState<'hero' | 'features' | 'about' | 'contact'>('hero');
+  const [cmsSection, setCmsSection] = useState<'hero' | 'features' | 'about' | 'contact' | 'social'>('hero');
   const [isSavingCMS, setIsSavingCMS] = useState(false);
   
   // Data States
-  const [usersList, setUsersList] = useState<User[]>([]);
-  const [coursesList, setCoursesList] = useState<Course[]>([]);
+  const [usersList, setUsersList] = useState<User[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(USERS_CACHE_KEY);
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   
   // Lesson Management State
   const [selectedCourseForLessons, setSelectedCourseForLessons] = useState<Course | null>(null);
@@ -55,9 +64,16 @@ export const AdminDashboard: React.FC = () => {
   
   // Loading States
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [loadingCourses, setLoadingCourses] = useState(false);
   const [loadingLessons, setLoadingLessons] = useState(false);
-  const [stats, setStats] = useState({ users: 0, active: 0, pending: 0, courses: 0 });
+  
+  // Stats Cache - Initialize instantly
+  const [stats, setStats] = useState(() => {
+      try {
+          const cached = sessionStorage.getItem(STATS_CACHE_KEY);
+          // Default to 0 but ready to render
+          return cached ? JSON.parse(cached) : { users: 0, active: 0, pending: 0, courses: 0 };
+      } catch { return { users: 0, active: 0, pending: 0, courses: 0 }; }
+  });
 
   // Search/Filter
   const [userSearch, setUserSearch] = useState('');
@@ -67,9 +83,50 @@ export const AdminDashboard: React.FC = () => {
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [isSavingCourse, setIsSavingCourse] = useState(false);
 
-  // Initial Load
+  // Enrollment Modal
+  const [isEnrollModalOpen, setIsEnrollModalOpen] = useState(false);
+  const [selectedUserForEnrollment, setSelectedUserForEnrollment] = useState<User | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState('');
+  const [isEnrolling, setIsEnrolling] = useState(false);
+
+  // --- SMART PRE-FILL LOGIC ---
   useEffect(() => {
-     setSettingsForm(JSON.parse(JSON.stringify(siteSettings)));
+     const defaults = translations.ar; 
+     
+     setSettingsForm(prev => ({
+        ...prev,
+        ...siteSettings,
+        content_config: {
+            ...prev.content_config,
+            ...siteSettings.content_config,
+            hero_title: siteSettings.content_config?.hero_title || defaults.hero_line1_default,
+            hero_title_2: siteSettings.content_config?.hero_title_2 || defaults.hero_line2_default,
+            hero_desc: siteSettings.content_config?.hero_desc || defaults.hero_desc_default,
+            footer_tagline: siteSettings.content_config?.footer_tagline || defaults.footer_tagline_default,
+            footer_sub_tagline: siteSettings.content_config?.footer_sub_tagline || defaults.footer_sub_tagline_default,
+            about_main_title: siteSettings.content_config?.about_main_title || defaults.about_main_title_default,
+            about_main_desc: siteSettings.content_config?.about_main_desc || defaults.about_main_desc_default,
+            mission_title: siteSettings.content_config?.mission_title || defaults.mission_title_default,
+            mission_desc: siteSettings.content_config?.mission_desc || defaults.mission_desc_default,
+            vision_title: siteSettings.content_config?.vision_title || defaults.vision_title_default,
+            vision_desc: siteSettings.content_config?.vision_desc || defaults.vision_desc_default,
+            contact_main_title: siteSettings.content_config?.contact_main_title || defaults.contact_main_title_default,
+            contact_main_desc: siteSettings.content_config?.contact_main_desc || defaults.contact_main_desc_default,
+            feat_analysis_title: siteSettings.content_config?.feat_analysis_title || defaults.feat_analysis,
+            feat_analysis_desc: siteSettings.content_config?.feat_analysis_desc || defaults.feat_analysis_desc,
+            feat_risk_title: siteSettings.content_config?.feat_risk_title || defaults.feat_risk,
+            feat_risk_desc: siteSettings.content_config?.feat_risk_desc || defaults.feat_risk_desc,
+            feat_psych_title: siteSettings.content_config?.feat_psych_title || defaults.feat_psych,
+            feat_psych_desc: siteSettings.content_config?.feat_psych_desc || defaults.feat_psych_desc,
+            feat_community_title: siteSettings.content_config?.feat_community_title || defaults.feat_community,
+            feat_community_desc: siteSettings.content_config?.feat_community_desc || defaults.feat_community_desc,
+            why_choose_us_title: siteSettings.content_config?.why_choose_us_title || defaults.why_choose_us_title_default,
+            why_choose_us_desc: siteSettings.content_config?.why_choose_us_desc || defaults.why_choose_us_desc_default,
+        },
+        features_config: { ...prev.features_config, ...siteSettings.features_config },
+        social_links: { ...prev.social_links, ...siteSettings.social_links },
+        stats: { ...prev.stats, ...siteSettings.stats }
+     }));
   }, [siteSettings]);
 
   useEffect(() => {
@@ -77,56 +134,63 @@ export const AdminDashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'users' && usersList.length === 0) fetchUsers();
-    if (activeTab === 'courses' && coursesList.length === 0) fetchCourses();
+    if (activeTab === 'users') {
+        fetchUsers();
+    }
   }, [activeTab]);
 
   const fetchStats = async () => {
-    const [ { count: totalUsers }, { count: activeUsers }, { count: pendingUsers }, { count: totalCourses } ] = await Promise.all([
-        supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-        supabase.from('courses').select('*', { count: 'exact', head: true })
-    ]);
-
-    setStats({
+    // Only fetch if we don't have stats or if it's been a while (optional logic, simplified here)
+    const { count: totalUsers } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
+    const { count: activeUsers } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'active');
+    const { count: pendingUsers } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+    
+    const newStats = {
         users: totalUsers || 0,
         active: activeUsers || 0,
         pending: pendingUsers || 0,
-        courses: totalCourses || 0
-    });
+        courses: courses.length
+    };
+    
+    setStats(newStats);
+    sessionStorage.setItem(STATS_CACHE_KEY, JSON.stringify(newStats));
   };
 
   const fetchUsers = async () => {
-      setLoadingUsers(true);
+      // Only show loading if we have NO data
+      if (usersList.length === 0) setLoadingUsers(true);
+      
       const { data } = await supabase
         .from('profiles')
         .select('id, full_name, email, role, status, created_at')
         .order('created_at', { ascending: false });
-      if (data) setUsersList(data as User[]);
+      
+      if (data) {
+          setUsersList(data as User[]);
+          sessionStorage.setItem(USERS_CACHE_KEY, JSON.stringify(data));
+      }
       setLoadingUsers(false);
-  };
-
-  const fetchCourses = async () => {
-      setLoadingCourses(true);
-      const { data } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
-      if (data) setCoursesList(data as Course[]);
-      setLoadingCourses(false);
   };
 
   const fetchLessons = async (courseId: string) => {
       setLoadingLessons(true);
       const { data } = await supabase.from('lessons').select('*').eq('course_id', courseId).order('order', { ascending: true });
-      if (data) setCourseLessons(data as Lesson[]);
+      if (data) {
+          setCourseLessons(data as Lesson[]);
+          sessionStorage.setItem(LESSONS_CACHE_KEY_PREFIX + courseId, JSON.stringify(data));
+      }
       setLoadingLessons(false);
   };
 
-  // --- CMS ACTIONS ---
-  const handleSettingChange = (field: keyof SiteSettings, value: any) => {
-    setSettingsForm(prev => ({ ...prev, [field]: value }));
+  const handleClearCache = () => {
+      if(!confirm('هل أنت متأكد؟ سيتم مسح جميع البيانات المخزنة مؤقتاً وإعادة تحميلها من الخادم.')) return;
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.reload();
   };
 
-  const handleNestedChange = (parent: 'content_config' | 'features_config', key: string, value: any) => {
+  // ... (Rest of the component remains unchanged) ...
+  const handleNestedChange = (parent: 'content_config' | 'features_config' | 'social_links' | 'stats', key: string, value: any) => {
     setSettingsForm(prev => ({
       ...prev,
       [parent]: {
@@ -136,21 +200,19 @@ export const AdminDashboard: React.FC = () => {
     }));
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (sectionName: string) => {
       setIsSavingCMS(true);
       try {
         await updateSettings(settingsForm);
-        showToast('تم تحديث إعدادات الموقع بنجاح', 'success');
-        refreshData();
-      } catch (error: any) {
-        console.error(error);
-        showToast('فشل الحفظ: ' + error.message, 'error');
+        showToast(`تم حفظ إعدادات ${sectionName} بنجاح`, 'success');
+      } catch (err: any) {
+          console.error(err);
+          showToast('فشل الحفظ: ' + err.message, 'error');
       } finally {
         setIsSavingCMS(false);
       }
   };
 
-  // --- COURSE ACTIONS ---
   const saveCourse = async () => {
       if (!editingCourse.title) {
           showToast('يرجى إدخال عنوان الكورس', 'error');
@@ -168,8 +230,8 @@ export const AdminDashboard: React.FC = () => {
           lesson_count: editingCourse.lesson_count || 0
       };
       
-      let error;
       try {
+        let error;
         if (editingCourse.id) {
             ({ error } = await supabase.from('courses').update(payload).eq('id', editingCourse.id));
         } else {
@@ -180,9 +242,10 @@ export const AdminDashboard: React.FC = () => {
 
         showToast('تم حفظ الكورس بنجاح', 'success');
         setIsCourseModalOpen(false);
-        fetchCourses();
-        refreshData();
+        await refreshData(); 
+        
       } catch (err: any) {
+        console.error("Save Course Error:", err);
         showToast('خطأ في الحفظ: ' + err.message, 'error');
       } finally {
         setIsSavingCourse(false);
@@ -191,13 +254,17 @@ export const AdminDashboard: React.FC = () => {
 
   const deleteCourse = async (id: string) => {
       if(!confirm('هل أنت متأكد من حذف الكورس؟ سيتم حذف جميع الدروس المرتبطة به.')) return;
-      await supabase.from('courses').delete().eq('id', id);
-      fetchCourses();
-      refreshData();
-      showToast('تم حذف الكورس', 'success');
+      
+      const { error } = await supabase.from('courses').delete().eq('id', id);
+      
+      if (error) {
+          showToast('فشل الحذف: ' + error.message, 'error');
+      } else {
+          showToast('تم حذف الكورس', 'success');
+          await refreshData();
+      }
   };
 
-  // --- LESSON ACTIONS ---
   const openLessonManager = (course: Course) => {
       setSelectedCourseForLessons(course);
       fetchLessons(course.id);
@@ -211,7 +278,7 @@ export const AdminDashboard: React.FC = () => {
       }
       
       setIsSavingLesson(true);
-
+      
       const payload = {
           course_id: selectedCourseForLessons.id,
           title: editingLesson.title,
@@ -235,8 +302,10 @@ export const AdminDashboard: React.FC = () => {
 
         showToast('تم حفظ الدرس بنجاح', 'success');
         setIsLessonModalOpen(false);
-        fetchLessons(selectedCourseForLessons.id);
+        await fetchLessons(selectedCourseForLessons.id);
+        
       } catch (err: any) {
+        console.error("Save Lesson Error:", err);
         showToast('خطأ في حفظ الدرس: ' + err.message, 'error');
       } finally {
         setIsSavingLesson(false);
@@ -245,30 +314,80 @@ export const AdminDashboard: React.FC = () => {
 
   const deleteLesson = async (id: string) => {
       if(!confirm('حذف الدرس؟')) return;
-      await supabase.from('lessons').delete().eq('id', id);
-      if (selectedCourseForLessons) fetchLessons(selectedCourseForLessons.id);
-      showToast('تم حذف الدرس', 'success');
+      
+      const { error } = await supabase.from('lessons').delete().eq('id', id);
+      
+      if (error) {
+          showToast('فشل الحذف: ' + error.message, 'error');
+      } else {
+          showToast('تم حذف الدرس', 'success');
+          if (selectedCourseForLessons) {
+              await fetchLessons(selectedCourseForLessons.id);
+          }
+      }
   };
 
-  // --- USER ACTIONS ---
   const approveUser = async (id: string) => {
-      await supabase.from('profiles').update({ status: 'active' }).eq('id', id);
-      setUsersList(prev => prev.map(u => u.id === id ? { ...u, status: 'active' } : u));
+      const updatedList = usersList.map(u => u.id === id ? { ...u, status: 'active' as const } : u);
+      setUsersList(updatedList);
+      sessionStorage.setItem(USERS_CACHE_KEY, JSON.stringify(updatedList));
       setStats(prev => ({ ...prev, active: prev.active + 1, pending: prev.pending - 1 }));
+      
+      await supabase.from('profiles').update({ status: 'active' }).eq('id', id);
       showToast('تم تفعيل العضو', 'success');
   };
 
   const deleteUser = async (id: string) => {
     if(!confirm('تحذير: هل أنت متأكد تماماً من حذف هذا العضو؟')) return;
+    const updatedList = usersList.filter(u => u.id !== id);
+    setUsersList(updatedList);
+    sessionStorage.setItem(USERS_CACHE_KEY, JSON.stringify(updatedList));
+    setStats(prev => ({ ...prev, users: prev.users - 1 }));
+    
     try {
         const { error } = await supabase.rpc('delete_user_completely', { target_user_id: id });
         if (error) throw error;
         showToast('تم حذف العضو', 'success');
-        setUsersList(prev => prev.filter(u => u.id !== id));
-        setStats(prev => ({ ...prev, users: prev.users - 1 }));
     } catch (error: any) {
         showToast('خطأ في الحذف: ' + error.message, 'error');
+        fetchUsers();
     }
+  };
+
+  const openEnrollModal = (user: User) => {
+      setSelectedUserForEnrollment(user);
+      setSelectedCourseId('');
+      setIsEnrollModalOpen(true);
+  };
+
+  const handleEnrollUser = async () => {
+      if (!selectedUserForEnrollment || !selectedCourseId) {
+          showToast('يرجى اختيار الكورس', 'error');
+          return;
+      }
+
+      setIsEnrolling(true);
+      try {
+          const { error } = await supabase.from('enrollments').insert({
+              user_id: selectedUserForEnrollment.id,
+              course_id: selectedCourseId
+          });
+
+          if (error) {
+              if (error.code === '23505') { // Unique violation
+                  showToast('هذا المستخدم مسجل بالفعل في هذا الكورس', 'error');
+              } else {
+                  throw error;
+              }
+          } else {
+              showToast('تم تسجيل المستخدم في الكورس بنجاح', 'success');
+              setIsEnrollModalOpen(false);
+          }
+      } catch (err: any) {
+          showToast('فشل التسجيل: ' + err.message, 'error');
+      } finally {
+          setIsEnrolling(false);
+      }
   };
 
   if (user?.role !== 'admin') return <div className="p-10 text-center text-white">غير مصرح لك بالدخول</div>;
@@ -285,12 +404,12 @@ export const AdminDashboard: React.FC = () => {
                 </h1>
                 <p className="text-gray-400 text-sm">تحكم كامل في المنصة، الكورسات، والأعضاء.</p>
             </div>
-            
-            <div className="flex items-center gap-3">
-                <Link to="/" target="_blank" className="bg-navy-800 hover:bg-navy-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors border border-white/5 shadow-lg">
-                    <Eye size={18} /> معاينة الموقع
-                </Link>
-            </div>
+            <button 
+                onClick={handleClearCache}
+                className="bg-red-500/10 text-red-400 border border-red-500/20 px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-red-500 hover:text-white transition-colors"
+            >
+                <Database size={14} /> مسح الكاش وإعادة التحميل
+            </button>
         </div>
 
         {/* Stats Grid */}
@@ -339,14 +458,6 @@ export const AdminDashboard: React.FC = () => {
                     <div className="space-y-6 animate-fade-in">
                         <div className="flex items-center justify-between border-b border-white/10 pb-4">
                             <h2 className="text-2xl font-bold text-white">تعديل محتوى الموقع</h2>
-                            <button 
-                                onClick={saveSettings} 
-                                disabled={isSavingCMS}
-                                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
-                            >
-                                {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} 
-                                {isSavingCMS ? 'جاري الحفظ...' : 'حفظ التغييرات'}
-                            </button>
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -355,6 +466,7 @@ export const AdminDashboard: React.FC = () => {
                                 { id: 'features', label: 'لماذا تختارنا', icon: Activity },
                                 { id: 'about', label: 'من نحن', icon: Shield },
                                 { id: 'contact', label: 'تواصل معنا', icon: MessageSquare },
+                                { id: 'social', label: 'روابط التواصل', icon: Share2 },
                             ].map(section => (
                                 <button 
                                     key={section.id}
@@ -421,6 +533,17 @@ export const AdminDashboard: React.FC = () => {
                                             />
                                         </div>
                                     </div>
+
+                                    <div className="pt-4 flex justify-end">
+                                        <button 
+                                            onClick={() => saveSettings('الواجهة الرئيسية')} 
+                                            disabled={isSavingCMS}
+                                            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
+                                        >
+                                            {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} 
+                                            حفظ التغييرات
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
@@ -482,13 +605,26 @@ export const AdminDashboard: React.FC = () => {
                                             </div>
                                         </div>
                                     </div>
+
+                                    <div className="pt-4 flex justify-end">
+                                        <button 
+                                            onClick={() => saveSettings('المميزات')} 
+                                            disabled={isSavingCMS}
+                                            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
+                                        >
+                                            {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} 
+                                            حفظ التغييرات
+                                        </button>
+                                    </div>
                                 </div>
                             )}
 
-                             {/* ABOUT & CONTACT */}
-                             {(cmsSection === 'about' || cmsSection === 'contact') && (
+                             {/* ABOUT SECTION */}
+                             {cmsSection === 'about' && (
                                 <div className="space-y-6">
-                                    <h3 className="text-gold-500 font-bold text-lg border-b border-white/5 pb-2">نصوص الصفحات الداخلية</h3>
+                                    <h3 className="text-gold-500 font-bold text-lg border-b border-white/5 pb-2">صفحة من نحن</h3>
+                                    
+                                    {/* Main Intro */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-gray-400 text-sm mb-2 font-bold">عنوان "من نحن"</label>
@@ -498,14 +634,169 @@ export const AdminDashboard: React.FC = () => {
                                             <label className="block text-gray-400 text-sm mb-2 font-bold">وصف "من نحن"</label>
                                             <textarea value={settingsForm.content_config?.about_main_desc || ''} onChange={e => handleNestedChange('content_config', 'about_main_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-24 focus:border-gold-500 outline-none resize-none" />
                                         </div>
+                                    </div>
+
+                                    {/* Mission & Vision */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                                        <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                            <h4 className="text-gold-500 font-bold mb-3 border-b border-white/5 pb-2">مهمتنا</h4>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">العنوان</label>
+                                                    <input value={settingsForm.content_config?.mission_title || ''} onChange={e => handleNestedChange('content_config', 'mission_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white focus:border-gold-500 outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">الوصف</label>
+                                                    <textarea value={settingsForm.content_config?.mission_desc || ''} onChange={e => handleNestedChange('content_config', 'mission_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white h-20 resize-none focus:border-gold-500 outline-none" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                            <h4 className="text-gold-500 font-bold mb-3 border-b border-white/5 pb-2">رؤيتنا</h4>
+                                            <div className="space-y-3">
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">العنوان</label>
+                                                    <input value={settingsForm.content_config?.vision_title || ''} onChange={e => handleNestedChange('content_config', 'vision_title', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white focus:border-gold-500 outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs text-gray-400 block mb-1">الوصف</label>
+                                                    <textarea value={settingsForm.content_config?.vision_desc || ''} onChange={e => handleNestedChange('content_config', 'vision_desc', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white h-20 resize-none focus:border-gold-500 outline-none" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Stats */}
+                                    <div className="mt-8 pt-6 border-t border-white/5">
+                                        <h3 className="text-gold-500 font-bold text-lg mb-4">أرقام وإحصائيات</h3>
+                                        
+                                        <div className="mb-4">
+                                            <label className="block text-gray-400 text-sm mb-2 font-bold">عنوان قسم الأرقام</label>
+                                            <input value={settingsForm.content_config?.stats_title || ''} onChange={e => handleNestedChange('content_config', 'stats_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white focus:border-gold-500 outline-none" placeholder="أرقام تتحدث عن نجاحنا" />
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            {/* Students */}
+                                            <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                                <div className="flex justify-between mb-2"><span className="text-white font-bold text-sm">عدد الطلاب</span></div>
+                                                <div className="space-y-2">
+                                                    <input value={settingsForm.stats?.students || ''} onChange={e => handleNestedChange('stats', 'students', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white text-center font-bold" placeholder="+1500" />
+                                                    <input value={settingsForm.content_config?.stats_students_label || ''} onChange={e => handleNestedChange('content_config', 'stats_students_label', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-gray-400 text-center text-xs" placeholder="متدرب نشط" />
+                                                </div>
+                                            </div>
+                                            {/* Hours */}
+                                            <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                                <div className="flex justify-between mb-2"><span className="text-white font-bold text-sm">ساعات التدريب</span></div>
+                                                <div className="space-y-2">
+                                                    <input value={settingsForm.stats?.hours || ''} onChange={e => handleNestedChange('stats', 'hours', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white text-center font-bold" placeholder="+50" />
+                                                    <input value={settingsForm.content_config?.stats_hours_label || ''} onChange={e => handleNestedChange('content_config', 'stats_hours_label', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-gray-400 text-center text-xs" placeholder="ساعة تدريبية" />
+                                                </div>
+                                            </div>
+                                            {/* Support */}
+                                            <div className="bg-navy-900 p-4 rounded-xl border border-white/5">
+                                                <div className="flex justify-between mb-2"><span className="text-white font-bold text-sm">الدعم الفني</span></div>
+                                                <div className="space-y-2">
+                                                    <input value={settingsForm.content_config?.stats_support_value || ''} onChange={e => handleNestedChange('content_config', 'stats_support_value', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-white text-center font-bold" placeholder="24/7" />
+                                                    <input value={settingsForm.content_config?.stats_support_label || ''} onChange={e => handleNestedChange('content_config', 'stats_support_label', e.target.value)} className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-gray-400 text-center text-xs" placeholder="دعم فني" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 flex justify-end">
+                                        <button 
+                                            onClick={() => saveSettings('من نحن')} 
+                                            disabled={isSavingCMS}
+                                            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
+                                        >
+                                            {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} 
+                                            حفظ التغييرات
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CONTACT SECTION */}
+                            {cmsSection === 'contact' && (
+                                <div className="space-y-6">
+                                    <h3 className="text-gold-500 font-bold text-lg border-b border-white/5 pb-2">صفحة تواصل معنا</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-gray-400 text-sm mb-2 font-bold">عنوان "تواصل معنا"</label>
                                             <input value={settingsForm.content_config?.contact_main_title || ''} onChange={e => handleNestedChange('content_config', 'contact_main_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white focus:border-gold-500 outline-none" />
                                         </div>
                                         <div>
                                             <label className="block text-gray-400 text-sm mb-2 font-bold">وصف "تواصل معنا"</label>
-                                            <textarea value={settingsForm.content_config?.contact_main_desc || ''} onChange={e => handleNestedChange('content_config', 'contact_main_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-24 focus:border-gold-500 outline-none resize-none" />
+                                            <textarea value={settingsForm.content_config?.contact_main_desc || ''} onChange={e => handleNestedChange('content_config', 'contact_main_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-24 focus:border-gold-500 outline-none resize-none" placeholder="فريق الدعم الفني جاهز للرد على استفساراتكم..." />
                                         </div>
+                                    </div>
+                                    
+                                    <div className="pt-4 flex justify-end">
+                                        <button 
+                                            onClick={() => saveSettings('تواصل معنا')} 
+                                            disabled={isSavingCMS}
+                                            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
+                                        >
+                                            {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} 
+                                            حفظ التغييرات
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* SOCIAL MEDIA LINKS */}
+                            {cmsSection === 'social' && (
+                                <div className="space-y-6">
+                                    <h3 className="text-gold-500 font-bold text-lg border-b border-white/5 pb-2">روابط التواصل الاجتماعي</h3>
+                                    <p className="text-sm text-gray-400">أدخل الروابط الخاصة بحساباتك. استخدم زر التفعيل لإظهار/إخفاء الأيقونة في الموقع.</p>
+                                    
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {[
+                                            { id: 'whatsapp', label: 'WhatsApp', placeholder: 'https://wa.me/...' },
+                                            { id: 'facebook', label: 'Facebook', placeholder: 'https://facebook.com/...' },
+                                            { id: 'instagram', label: 'Instagram', placeholder: 'https://instagram.com/...' },
+                                            { id: 'telegram', label: 'Telegram', placeholder: 'https://t.me/...' },
+                                            { id: 'youtube', label: 'YouTube', placeholder: 'https://youtube.com/...' },
+                                            { id: 'tiktok', label: 'TikTok', placeholder: 'https://tiktok.com/...' },
+                                            { id: 'twitter', label: 'Twitter (X)', placeholder: 'https://x.com/...' },
+                                        ].map((social) => {
+                                            const isVisible = settingsForm.features_config?.[`social_${social.id}_visible` as keyof typeof settingsForm.features_config] !== false;
+                                            
+                                            return (
+                                                <div key={social.id} className="bg-navy-900 p-4 rounded-xl border border-white/5 flex items-center gap-4 hover:border-white/10 transition-colors">
+                                                    <div className="w-32 font-bold text-white shrink-0">{social.label}</div>
+                                                    
+                                                    <div className="flex-1">
+                                                        <input 
+                                                            value={settingsForm.social_links?.[social.id as keyof typeof settingsForm.social_links] || ''}
+                                                            onChange={e => handleNestedChange('social_links', social.id, e.target.value)}
+                                                            className="w-full bg-navy-950 border border-white/10 p-2 rounded-lg text-gray-300 text-sm focus:border-gold-500 outline-none font-mono"
+                                                            placeholder={social.placeholder}
+                                                            dir="ltr"
+                                                        />
+                                                    </div>
+
+                                                    <button 
+                                                        onClick={() => handleNestedChange('features_config', `social_${social.id}_visible`, !isVisible)}
+                                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${isVisible ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}
+                                                    >
+                                                        {isVisible ? <ToggleRight size={24} /> : <ToggleLeft size={24} />}
+                                                        {isVisible ? 'ظاهر' : 'مخفي'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <div className="pt-4 flex justify-end">
+                                        <button 
+                                            onClick={() => saveSettings('روابط التواصل')} 
+                                            disabled={isSavingCMS}
+                                            className="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-500/20 transition-all disabled:opacity-50"
+                                        >
+                                            {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} 
+                                            حفظ التغييرات
+                                        </button>
                                     </div>
                                 </div>
                             )}
@@ -519,8 +810,8 @@ export const AdminDashboard: React.FC = () => {
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white">إدارة الكورسات</h2>
                             <div className="flex gap-2">
-                                <button onClick={fetchCourses} className="p-2 bg-navy-800 rounded-lg hover:bg-white/5 transition-colors" title="تحديث">
-                                    <RefreshCw size={18} className={loadingCourses ? 'animate-spin' : ''} />
+                                <button onClick={refreshData} className="p-2 bg-navy-800 rounded-lg hover:bg-white/5 transition-colors" title="تحديث">
+                                    <RefreshCw size={18} />
                                 </button>
                                 <button onClick={() => { setEditingCourse({}); setIsCourseModalOpen(true); }} className="bg-gold-500 text-navy-950 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gold-400 transition-colors shadow-lg">
                                     <Plus size={18} /> إضافة كورس
@@ -528,32 +819,28 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        {loadingCourses ? (
-                            <div className="text-center py-10"><LoadingSpinner /></div>
-                        ) : (
-                            <div className="space-y-4">
-                                {coursesList.map(course => (
-                                    <div key={course.id} className="bg-navy-950 p-4 rounded-xl border border-white/5 flex items-center justify-between hover:border-gold-500/30 transition-colors">
-                                        <div className="flex items-center gap-4">
-                                            <img src={course.thumbnail} className="w-16 h-10 object-cover rounded border border-white/10" />
-                                            <div>
-                                                <h3 className="font-bold text-white">{course.title}</h3>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${course.is_paid ? 'bg-gold-500/20 text-gold-500' : 'bg-green-500/20 text-green-500'}`}>
-                                                    {course.is_paid ? 'مدفوع (VIP)' : 'مجاني'}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <button onClick={() => openLessonManager(course)} className="bg-blue-500/10 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500 hover:text-white transition-colors flex items-center gap-2 text-sm font-bold">
-                                                <Video size={16} /> إدارة الدروس
-                                            </button>
-                                            <button onClick={() => { setEditingCourse(course); setIsCourseModalOpen(true); }} className="text-gray-400 p-2 hover:bg-white/10 rounded transition-colors"><Edit size={18} /></button>
-                                            <button onClick={() => deleteCourse(course.id)} className="text-red-400 p-2 hover:bg-red-500/10 rounded transition-colors"><Trash2 size={18} /></button>
+                        <div className="space-y-4">
+                            {courses.map(course => (
+                                <div key={course.id} className="bg-navy-950 p-4 rounded-xl border border-white/5 flex items-center justify-between hover:border-gold-500/30 transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <img src={course.thumbnail} className="w-16 h-10 object-cover rounded border border-white/10" />
+                                        <div>
+                                            <h3 className="font-bold text-white">{course.title}</h3>
+                                            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${course.is_paid ? 'bg-gold-500/20 text-gold-500' : 'bg-green-500/20 text-green-500'}`}>
+                                                {course.is_paid ? 'مدفوع (VIP)' : 'مجاني'}
+                                            </span>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        )}
+                                    <div className="flex gap-2">
+                                        <button onClick={() => openLessonManager(course)} className="bg-blue-500/10 text-blue-400 px-3 py-2 rounded-lg hover:bg-blue-500 hover:text-white transition-colors flex items-center gap-2 text-sm font-bold">
+                                            <Video size={16} /> إدارة الدروس
+                                        </button>
+                                        <button onClick={() => { setEditingCourse(course); setIsCourseModalOpen(true); }} className="text-gray-400 p-2 hover:bg-white/10 rounded transition-colors"><Edit size={18} /></button>
+                                        <button onClick={() => deleteCourse(course.id)} className="text-red-400 p-2 hover:bg-red-500/10 rounded transition-colors"><Trash2 size={18} /></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
 
@@ -617,7 +904,7 @@ export const AdminDashboard: React.FC = () => {
                                 <span className="text-xs bg-white/10 px-2 py-1 rounded-full text-gray-400">{usersList.length}</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <button onClick={fetchUsers} className="p-2 bg-navy-800 rounded-lg hover:bg-white/5 transition-colors" title="تحديث">
+                                <button onClick={() => { fetchUsers(); }} className="p-2 bg-navy-800 rounded-lg hover:bg-white/5 transition-colors" title="تحديث">
                                     <RefreshCw size={18} className={loadingUsers ? 'animate-spin' : ''} />
                                 </button>
                                 <div className="relative">
@@ -648,7 +935,15 @@ export const AdminDashboard: React.FC = () => {
                                                 <button onClick={() => approveUser(u.id)} className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-bold transition-colors">تفعيل</button>
                                             )}
                                             {u.role !== 'admin' && (
-                                                <button onClick={() => deleteUser(u.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 px-3 py-1 rounded text-xs hover:bg-red-500 hover:text-white transition-colors">حذف</button>
+                                                <>
+                                                    <button 
+                                                        onClick={() => openEnrollModal(u)} 
+                                                        className="bg-gold-500/10 text-gold-500 border border-gold-500/20 px-3 py-1 rounded text-xs font-bold hover:bg-gold-500 hover:text-navy-950 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <GraduationCap size={14} /> تسجيل في كورس
+                                                    </button>
+                                                    <button onClick={() => deleteUser(u.id)} className="bg-red-500/10 border border-red-500/20 text-red-500 px-3 py-1 rounded text-xs hover:bg-red-500 hover:text-white transition-colors">حذف</button>
+                                                </>
                                             )}
                                         </div>
                                     </div>
@@ -770,6 +1065,10 @@ export const AdminDashboard: React.FC = () => {
                             placeholder="YouTube, Vimeo, or Direct Link"
                         />
                     </div>
+                    <div className="flex items-start gap-2 mt-2 text-[10px] text-gray-400 bg-white/5 p-2 rounded-lg">
+                        <Info size={14} className="shrink-0 mt-0.5 text-gold-500" />
+                        <p>يدعم: YouTube, Vimeo, Google Drive (Preview), أو روابط MP4 مباشرة. يمكنك أيضاً لصق كود Embed.</p>
+                    </div>
                 </div>
 
                 <div className="flex gap-3">
@@ -819,6 +1118,56 @@ export const AdminDashboard: React.FC = () => {
                         {isSavingLesson ? 'جاري الحفظ...' : 'حفظ الدرس'}
                     </button>
                     <button onClick={() => setIsLessonModalOpen(false)} className="flex-1 bg-white/5 text-white py-3 rounded-xl hover:bg-white/10 transition-colors font-bold">إلغاء</button>
+                </div>
+            </div>
+        </Modal>
+
+        {/* Enrollment Modal */}
+        <Modal
+            isOpen={isEnrollModalOpen}
+            onClose={() => setIsEnrollModalOpen(false)}
+            title="تسجيل طالب في كورس"
+        >
+            <div className="space-y-6">
+                <div className="bg-navy-950 p-4 rounded-xl border border-white/5">
+                    <p className="text-sm text-gray-400 mb-1">الطالب المحدد:</p>
+                    <p className="font-bold text-white text-lg">{selectedUserForEnrollment?.full_name || 'بدون اسم'}</p>
+                    <p className="text-xs text-gray-500">{selectedUserForEnrollment?.email}</p>
+                </div>
+
+                <div>
+                    <label className="block text-gray-400 text-sm mb-2 font-bold">اختر الكورس لإضافته:</label>
+                    <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
+                        {courses.filter(c => c.is_paid).map(course => (
+                            <button
+                                key={course.id}
+                                onClick={() => setSelectedCourseId(course.id)}
+                                className={`w-full p-3 rounded-xl border flex items-center justify-between transition-all ${
+                                    selectedCourseId === course.id 
+                                    ? 'bg-gold-500/10 border-gold-500 text-gold-500' 
+                                    : 'bg-navy-950 border-white/10 text-gray-300 hover:bg-white/5'
+                                }`}
+                            >
+                                <span className="font-bold text-sm">{course.title}</span>
+                                {selectedCourseId === course.id && <CheckCircle size={18} />}
+                            </button>
+                        ))}
+                        {courses.filter(c => c.is_paid).length === 0 && (
+                            <p className="text-center text-gray-500 text-sm py-4">لا توجد كورسات مدفوعة متاحة.</p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                    <button 
+                        onClick={handleEnrollUser} 
+                        disabled={isEnrolling || !selectedCourseId}
+                        className="flex-1 bg-gold-500 text-navy-950 py-3 rounded-xl font-bold hover:bg-gold-400 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                        {isEnrolling ? <LoadingSpinner /> : <GraduationCap size={18} />}
+                        {isEnrolling ? 'جاري التسجيل...' : 'تأكيد التسجيل'}
+                    </button>
+                    <button onClick={() => setIsEnrollModalOpen(false)} className="flex-1 bg-white/5 text-white py-3 rounded-xl hover:bg-white/10 transition-colors font-bold">إلغاء</button>
                 </div>
             </div>
         </Modal>

@@ -4,9 +4,8 @@ import { useStore } from '../context/StoreContext';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../context/ToastContext';
-import { supabase } from '../lib/supabase';
 import { getErrorMessage } from '../utils/errorHandling';
-import { AlertCircle, Loader2, Clock, ShieldCheck, UserX, WifiOff } from 'lucide-react';
+import { AlertCircle, Loader2, Clock, ShieldCheck, UserX, WifiOff, RefreshCcw } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,11 +13,23 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [shake, setShake] = useState(false);
+  const [showForceReload, setShowForceReload] = useState(false);
   
   const navigate = useNavigate();
   const { language, t, dir } = useLanguage();
   const { showToast } = useToast();
-  const { user, refreshData } = useStore();
+  const { user, login } = useStore();
+
+  // 🚀 INSTANT LOAD OPTIMIZATION: Prefetch Admin Dashboard
+  useEffect(() => {
+    const prefetchDashboard = async () => {
+      try {
+        await import('./AdminDashboard');
+        await import('./Home');
+      } catch (e) {}
+    };
+    prefetchDashboard();
+  }, []);
 
   // Redirect if already logged in
   useEffect(() => {
@@ -33,71 +44,48 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
     setError('');
     setShake(false);
+    setShowForceReload(false);
     
+    // Safety Timeout: If login takes more than 8 seconds, show "Force Reload" option
+    const safetyTimer = setTimeout(() => {
+        if (isSubmitting) {
+            setShowForceReload(true);
+            setError('استجابة الخادم بطيئة جداً. يرجى التحقق من الإنترنت أو إعادة تحميل الصفحة.');
+        }
+    }, 8000);
+
     try {
       const normalizedEmail = email.trim().toLowerCase();
       
-      // 1. Attempt Supabase Login
-      const { data, error: authError } = await supabase.auth.signInWithPassword({ 
-        email: normalizedEmail, 
-        password 
-      });
+      // Use the optimized store login
+      const loggedInUser = await login(normalizedEmail, password);
       
-      if (authError) throw authError;
-      if (!data.user) throw new Error('No user data returned');
+      clearTimeout(safetyTimer);
 
-      // 2. Optimized Profile Fetch (Only fetch what's needed for the check)
-      // We use maybeSingle() to avoid errors if 0 or >1 rows returned (though ID is unique)
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role, status')
-        .eq('id', data.user.id)
-        .maybeSingle();
-
-      // Handle Missing Profile (Deleted Account)
-      if (!profile) {
-        await supabase.auth.signOut();
-        throw new Error('ACCOUNT_DELETED');
+      if (loggedInUser) {
+          if (loggedInUser.status === 'banned') {
+              throw new Error('ACCOUNT_BANNED');
+          }
+          
+          showToast(t('welcome_back'), 'success');
+          navigate(loggedInUser.role === 'admin' ? '/admin' : '/', { replace: true });
+      } else {
+          throw new Error('Login failed');
       }
-
-      // Handle Pending Account
-      if (profile.status === 'pending' && profile.role !== 'admin') {
-        await supabase.auth.signOut();
-        throw new Error('ACCOUNT_PENDING');
-      }
-
-      // Handle Banned Account
-      if (profile.status === 'banned') {
-        await supabase.auth.signOut();
-        throw new Error('ACCOUNT_BANNED');
-      }
-
-      // 3. Success - Trigger Global Refresh in Background
-      // We don't await this to keep UI snappy. The StoreProvider will pick up the auth change event anyway.
-      refreshData(); 
-      
-      showToast(t('welcome_back'), 'success');
-      navigate(profile.role === 'admin' ? '/admin' : '/', { replace: true });
       
     } catch (err: any) {
-      // Only log unexpected system errors
-      if (!err?.message?.includes('Email not confirmed') && !err?.message?.includes('Invalid login')) {
-        console.error("Login Error:", err);
-      }
-      
+      clearTimeout(safetyTimer);
+      console.error("Login Error:", err);
       setShake(true);
       setTimeout(() => setShake(false), 500);
-
-      const professionalMessage = getErrorMessage(err, language);
-      setError(professionalMessage);
-    } finally {
+      setError(getErrorMessage(err, language));
       setIsSubmitting(false);
     }
   };
 
   const getErrorIcon = () => {
     if (error.includes('المراجعة') || error.includes('review')) return <Clock size={20} />;
-    if (error.includes('اتصال') || error.includes('Connection')) return <WifiOff size={20} />;
+    if (error.includes('اتصال') || error.includes('Connection') || error.includes('بطيئة')) return <WifiOff size={20} />;
     if (error.includes('غير موجود') || error.includes('not found')) return <UserX size={20} />;
     return <AlertCircle size={20} />;
   };
@@ -122,6 +110,14 @@ export const Login: React.FC = () => {
                <div className="shrink-0 mt-0.5">{getErrorIcon()}</div>
                <div className="flex flex-col gap-1 leading-relaxed">
                  <span>{error}</span>
+                 {showForceReload && (
+                     <button 
+                        onClick={() => window.location.reload()} 
+                        className="mt-2 bg-white/10 hover:bg-white/20 px-3 py-1 rounded text-xs flex items-center gap-2 w-fit transition-colors"
+                     >
+                        <RefreshCcw size={12} /> إعادة تحميل الصفحة
+                     </button>
+                 )}
                </div>
             </div>
           )}

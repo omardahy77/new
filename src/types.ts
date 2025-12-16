@@ -80,6 +80,8 @@ export interface SiteSettings {
     show_coming_soon?: boolean;
     show_stats?: boolean;
     allow_registration?: boolean;
+    
+    // Social Visibility Toggles
     social_whatsapp_visible?: boolean;
     social_facebook_visible?: boolean;
     social_telegram_visible?: boolean;
@@ -93,6 +95,9 @@ export interface SiteSettings {
   hero_title_line1?: string;
   hero_title_line2?: string;
   hero_desc?: string;
+  
+  // Virtual Fields (Frontend Only - Do NOT send to DB)
+  hero_title?: string; 
   
   stats?: {
     students?: string;

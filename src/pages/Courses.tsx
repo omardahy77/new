@@ -25,7 +25,7 @@ const CourseCardSkeleton = () => (
 );
 
 export const Courses: React.FC = () => {
-  const { courses, user, checkAccess, siteSettings, coursesLoading, enrollments } = useStore();
+  const { courses, user, checkAccess, siteSettings, coursesLoading } = useStore();
   const { t, language, dir } = useLanguage();
   const navigate = useNavigate();
   const content = siteSettings.content_config || {};
@@ -54,23 +54,12 @@ export const Courses: React.FC = () => {
     return level;
   };
 
-  // --- VISIBILITY LOGIC (THE KEY FEATURE) ---
-  // 1. Admin sees everything.
-  // 2. Free courses are visible to everyone.
-  // 3. Paid courses are ONLY visible if the user is ENROLLED.
-  const visibleCourses = courses.filter(course => {
-      if (user?.role === 'admin') return true; // Admin sees all
-      if (!course.is_paid) return true; // Free courses visible to all
-      
-      // Paid Course Logic:
-      // Must be logged in AND enrolled to see it in the list
-      if (user && enrollments.some(e => e.course_id === course.id)) {
-          return true;
-      }
-      return false; // Hide otherwise
-  });
-
-  const showComingSoon = user && (siteSettings.features_config?.show_coming_soon ?? true);
+  // VISIBILITY LOGIC:
+  // 1. Logged In: Show ALL courses (Free + Paid)
+  // 2. Logged Out: Show ONLY Free courses
+  const visibleCourses = user 
+    ? courses 
+    : courses.filter(c => !c.is_paid);
 
   return (
     <div className="min-h-screen pt-40 pb-20" dir={dir}>
@@ -81,7 +70,10 @@ export const Courses: React.FC = () => {
             {getContent('courses_main_title') || t('courses')}
           </h1>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            {getContent('courses_main_desc') || t('latest_courses_sub')}
+            {user 
+              ? (getContent('courses_main_desc') || t('latest_courses_sub'))
+              : 'سجل الدخول لمشاهدة الكورسات المدفوعة والاحترافية'
+            }
           </p>
         </div>
 
@@ -92,9 +84,11 @@ export const Courses: React.FC = () => {
                <CourseCardSkeleton />
                <CourseCardSkeleton />
              </>
-          ) : visibleCourses.length === 0 && !showComingSoon ? (
-            <div className="text-center text-gray-500 py-10 col-span-full">
-              {t('no_courses')}
+          ) : visibleCourses.length === 0 ? (
+            <div className="text-center text-gray-500 py-10 col-span-full bg-navy-900/50 rounded-2xl border border-white/5 p-10">
+              <BookOpen size={48} className="mx-auto mb-4 opacity-50" />
+              <p className="text-xl font-bold">{t('no_courses')}</p>
+              {!user && <p className="text-sm mt-2 text-gold-500">ملاحظة: الكورسات المدفوعة تظهر فقط للأعضاء المسجلين.</p>}
             </div>
           ) : (
             visibleCourses.map((course, idx) => {
@@ -118,11 +112,11 @@ export const Courses: React.FC = () => {
                     {/* Badges */}
                     <div className={`absolute top-4 z-10 flex flex-col gap-2 ${dir === 'rtl' ? 'right-4' : 'left-4'}`}>
                         {course.is_paid ? (
-                        <span className="bg-navy-950/90 text-gold-400 px-3 py-1 rounded-lg text-xs font-bold border border-gold-500/30 flex items-center gap-1 shadow-lg backdrop-blur-sm w-fit">
+                        <span className="bg-navy-950/90 text-gold-400 px-3 py-1.5 rounded-lg text-xs font-bold border border-gold-500/30 flex items-center gap-1 shadow-lg backdrop-blur-sm w-fit">
                             <Crown size={12} fill="currentColor" /> {t('premium')}
                         </span>
                         ) : (
-                        <span className="bg-green-500/90 text-white px-3 py-1 rounded-lg text-xs font-bold shadow-lg backdrop-blur-sm w-fit">{t('free')}</span>
+                        <span className="bg-green-500/90 text-white px-3 py-1.5 rounded-lg text-xs font-bold shadow-lg backdrop-blur-sm w-fit">{t('free')}</span>
                         )}
                     </div>
                     </div>

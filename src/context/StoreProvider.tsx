@@ -2,16 +2,15 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types';
 import { StoreContext } from './StoreContext';
+import { DEFAULT_COURSES } from '../constants';
 
-// VERSION CONTROL: FRESH START V11 (Turbo Cache)
-const APP_VERSION = '11.0.0-TURBO'; 
+// VERSION CONTROL: INSTANT LOAD V14.2 (FAIL-SAFE)
+const APP_VERSION = '14.2.0-FAIL-SAFE'; 
 
 // Default Settings
 const defaultSettings: SiteSettings = {
   site_name: "Sniper FX Gold",
   site_name_en: "Sniper FX Gold",
-  hero_title: "تداول بذكاء بدقة القناص",
-  hero_title_en: "Trade Smart with Sniper Precision",
   hero_title_line1: "تداول بذكاء",
   hero_title_line1_en: "Trade Smart",
   hero_title_line2: "بدقة القناص",
@@ -28,149 +27,186 @@ const defaultSettings: SiteSettings = {
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
-  const [siteSettings, setSiteSettings] = useState<SiteSettings>(defaultSettings);
-  const [loading, setLoading] = useState(true);
-  const [coursesLoading, setCoursesLoading] = useState(true);
-
-  // --- CACHE HELPERS ---
-  const loadFromCache = () => {
+  const [user, setUser] = useState<User | null>(() => {
     try {
-      const cachedSettings = localStorage.getItem('sniper_settings_cache');
-      const cachedCourses = localStorage.getItem('sniper_courses_cache');
-      const cachedProfile = localStorage.getItem('sniper_profile_cache');
-      
-      let hasCache = false;
+        const cached = localStorage.getItem('sniper_profile_cache');
+        return cached ? JSON.parse(cached) : null;
+    } catch { return null; }
+  });
+  
+  const [courses, setCourses] = useState<Course[]>(() => {
+    try {
+        const cached = localStorage.getItem('sniper_courses_cache');
+        if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.length > 0) return parsed;
+        }
+    } catch(e) {}
+    return DEFAULT_COURSES; 
+  });
 
-      if (cachedSettings) {
-        setSiteSettings(JSON.parse(cachedSettings));
-        hasCache = true;
-      }
-      
-      if (cachedCourses) {
-        setCourses(JSON.parse(cachedCourses));
-        hasCache = true;
-      }
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  
+  const [siteSettings, setSiteSettings] = useState<SiteSettings>(() => {
+      try {
+          const cached = localStorage.getItem('sniper_settings_cache');
+          return cached ? JSON.parse(cached) : defaultSettings;
+      } catch { return defaultSettings; }
+  });
 
-      if (cachedProfile) {
-        setUser(JSON.parse(cachedProfile));
-        hasCache = true;
-      }
+  const [loading, setLoading] = useState(false);
+  const [coursesLoading, setCoursesLoading] = useState(false);
 
-      // If we have cache, we can stop the global loading spinner immediately
-      // The fresh data will update in the background (Stale-While-Revalidate)
-      if (hasCache) {
-        setLoading(false);
-        setCoursesLoading(false);
+  // --- DATA FETCHING ---
+  
+  const fetchCourses = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
+      if (!error && data && data.length > 0) {
+        setCourses(data as Course[]);
+        localStorage.setItem('sniper_courses_cache', JSON.stringify(data));
       }
     } catch (e) {
-      console.error("Cache load error", e);
+      console.error("Courses sync error:", e);
     }
-  };
+  }, []);
 
-  // Optimized Profile Fetch
+  const fetchSettings = useCallback(async () => {
+    try {
+      const { data } = await supabase.from('site_settings').select('*').limit(1).maybeSingle();
+      if (data) {
+        const mergedSettings = { ...defaultSettings, ...data };
+        setSiteSettings(mergedSettings);
+        localStorage.setItem('sniper_settings_cache', JSON.stringify(mergedSettings));
+      }
+    } catch (e) {
+      console.error("Settings sync error:", e);
+    }
+  }, []);
+
   const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
     try {
-      let { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      let { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       
-      // SELF-HEALING: Only run if profile is strictly missing
+      // FALLBACK: If profile missing (DB lag), construct it from email
       if (!data && userEmail) {
          const isMasterAdmin = userEmail === 'admin@sniperfx.com';
-         const newProfile = {
+         data = {
              id: userId,
              email: userEmail,
              full_name: userEmail.split('@')[0] || 'User',
              role: isMasterAdmin ? 'admin' : 'student',
-             status: isMasterAdmin ? 'active' : 'pending'
+             status: isMasterAdmin ? 'active' : 'pending',
+             created_at: new Date().toISOString()
          };
-
-         const { data: createdProfile } = await supabase.from('profiles').insert([newProfile]).select().single();
-         if (createdProfile) data = createdProfile;
+         
+         // Try to self-heal (create profile) silently
+         supabase.from('profiles').insert([data]).then(({ error }) => {
+             if (error) console.warn("Self-heal profile warning:", error.message);
+         });
       }
 
       if (data) {
         setUser(data as User);
-        localStorage.setItem('sniper_profile_cache', JSON.stringify(data)); // Cache Profile
-
-        // Fetch enrollments
+        localStorage.setItem('sniper_profile_cache', JSON.stringify(data));
         const { data: enrollData } = await supabase.from('enrollments').select('*').eq('user_id', userId);
         if (enrollData) setEnrollments(enrollData as Enrollment[]);
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      console.error("Profile sync error:", error);
     }
   }, []);
 
+  // --- OPTIMIZED LOGIN WITH TIMEOUT ---
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      // Create a promise that rejects after 8 seconds (Shortened for better UX)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('TIMEOUT')), 8000)
+      );
+
+      // The actual login request
+      const loginRequest = supabase.auth.signInWithPassword({ email, password });
+
+      // Race them
+      const result: any = await Promise.race([loginRequest, timeoutPromise]);
+      
+      const { data, error } = result;
       if (error) throw error;
+      
       if (data.user) {
-          await fetchProfile(data.user.id, data.user.email);
-          return user; 
+          // Optimistic Update - IMMEDIATE
+          const metadata = data.user.user_metadata || {};
+          const isHardcodedAdmin = email.trim().toLowerCase() === 'admin@sniperfx.com';
+          const role = isHardcodedAdmin ? 'admin' : (metadata.role || 'student');
+          
+          const optimisticUser: User = {
+              id: data.user.id,
+              email: data.user.email!,
+              full_name: metadata.full_name || data.user.email?.split('@')[0],
+              phone_number: metadata.phone_number,
+              role: role as 'admin' | 'student',
+              status: 'active', 
+              created_at: new Date().toISOString()
+          };
+
+          setUser(optimisticUser);
+          localStorage.setItem('sniper_profile_cache', JSON.stringify(optimisticUser));
+
+          // Background sync (don't await)
+          fetchProfile(data.user.id, data.user.email);
+          
+          return optimisticUser;
       }
       return null;
     } catch (err: any) {
+      if (err.message === 'TIMEOUT') {
+          throw new Error('استجابة الخادم بطيئة جداً. يرجى المحاولة مرة أخرى.');
+      }
       throw err;
     }
   };
-
-  const fetchCourses = useCallback(async () => {
-    // Only show loading if we don't have courses yet
-    if (courses.length === 0) setCoursesLoading(true);
-    
-    try {
-      const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
-      if (!error && data) {
-        setCourses(data as Course[]);
-        localStorage.setItem('sniper_courses_cache', JSON.stringify(data)); // Cache Courses
-      }
-    } catch (e) {
-      console.error("Courses fetch error:", e);
-    } finally {
-      setCoursesLoading(false);
-    }
-  }, [courses.length]);
-
-  const fetchSettings = useCallback(async () => {
-    try {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      if (data) {
-        const mergedSettings = {
-          ...defaultSettings,
-          ...data,
-          social_links: { ...defaultSettings.social_links, ...(data.social_links || {}) },
-          features_config: { ...defaultSettings.features_config, ...(data.features_config || {}) },
-          content_config: { ...defaultSettings.content_config, ...(data.content_config || {}) },
-          home_features: data.home_features || defaultSettings.home_features,
-          stats: { ...defaultSettings.stats, ...(data.stats || {}) }
-        };
-        
-        setSiteSettings(mergedSettings);
-        localStorage.setItem('sniper_settings_cache', JSON.stringify(mergedSettings)); // Cache Settings
-      }
-    } catch (e) {
-      console.error("Settings fetch error:", e);
-    }
-  }, []);
 
   const refreshEnrollments = async () => {
     if (user) {
       const { data } = await supabase.from('enrollments').select('*').eq('user_id', user.id);
       if (data) setEnrollments(data as Enrollment[]);
     }
+  };
+
+  const updateSettings = async (newSettings: Partial<SiteSettings>) => {
+    const optimisticSettings = { ...siteSettings, ...newSettings };
+    setSiteSettings(optimisticSettings);
+    localStorage.setItem('sniper_settings_cache', JSON.stringify(optimisticSettings));
+
+    try {
+        let targetId = siteSettings.id;
+        if (!targetId) {
+            const { data: existing } = await supabase.from('site_settings').select('id').limit(1).maybeSingle();
+            targetId = existing?.id;
+        }
+        
+        const payload: any = { ...newSettings };
+        delete payload.id;
+        delete payload.created_at;
+        delete payload.hero_title; 
+        
+        if (targetId) {
+            await supabase.from('site_settings').update(payload).eq('id', targetId);
+        } else {
+            await supabase.from('site_settings').insert([{ ...defaultSettings, ...payload }]);
+        }
+    } catch (error) {
+        console.error("Save failed:", error);
+    }
+  };
+
+  const checkAccess = (course: Course) => {
+    if (user?.role === 'admin') return true;
+    if (!course.is_paid) return true; 
+    if (!user) return false;
+    if (user.status !== 'active') return false;
+    return enrollments.some(e => e.course_id === course.id);
   };
 
   const saveLessonProgress = async (lessonId: string, position: number, duration: number, isCompleted: boolean) => {
@@ -184,9 +220,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         is_completed: isCompleted,
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id,lesson_id' });
-    } catch (e) {
-      // Silent fail
-    }
+    } catch (e) {}
   };
 
   const getLessonProgress = async (lessonId: string): Promise<LessonProgress | null> => {
@@ -194,107 +228,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const { data } = await supabase.from('lesson_progress').select('*').eq('user_id', user.id).eq('lesson_id', lessonId).single();
       return data as LessonProgress;
-    } catch {
-      return null;
-    }
-  };
-
-  const updateSettings = async (newSettings: Partial<SiteSettings>) => {
-    try {
-        let targetId = siteSettings.id;
-
-        if (!targetId) {
-            const { data: existing } = await supabase
-                .from('site_settings')
-                .select('id')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            targetId = existing?.id;
-        }
-        
-        const payload: any = { ...newSettings };
-        delete payload.id;
-        delete payload.created_at;
-
-        let result;
-
-        if (targetId) {
-            result = await supabase.from('site_settings').update(payload).eq('id', targetId).select().single();
-        } else {
-            const fullPayload = { ...defaultSettings, ...payload };
-            result = await supabase.from('site_settings').insert([fullPayload]).select().single();
-        }
-
-        if (result.error) throw result.error;
-        
-        if (result.data) {
-            const updated = {
-                ...siteSettings,
-                ...result.data,
-                social_links: { ...siteSettings.social_links, ...(result.data.social_links || {}) },
-                features_config: { ...siteSettings.features_config, ...(result.data.features_config || {}) },
-                content_config: { ...siteSettings.content_config, ...(result.data.content_config || {}) },
-                stats: { ...siteSettings.stats, ...(result.data.stats || {}) }
-            };
-            setSiteSettings(updated);
-            localStorage.setItem('sniper_settings_cache', JSON.stringify(updated));
-        }
-    } catch (error) {
-        throw error;
-    }
-  };
-
-  const checkAccess = (course: Course) => {
-    if (user?.role === 'admin') return true;
-    if (!course.is_paid) return true; 
-    if (!user) return false;
-    if (user.status !== 'active') return false;
-    return enrollments.some(e => e.course_id === course.id);
+    } catch { return null; }
   };
 
   const signOut = async () => {
-    try {
-        setUser(null);
-        setEnrollments([]);
-        localStorage.removeItem('sniper_profile_cache'); // Clear profile cache
-        await supabase.auth.signOut();
-    } catch (e) {
-        console.error("Sign out error:", e);
-    }
+    setUser(null);
+    setEnrollments([]);
+    localStorage.removeItem('sniper_profile_cache');
+    await supabase.auth.signOut();
   };
 
-  // INITIALIZATION LOGIC
   useEffect(() => {
-    // 0. Version Check (Clear cache if version mismatch)
-    const currentVersion = localStorage.getItem('app_version');
-    if (currentVersion !== APP_VERSION) {
-        localStorage.clear(); // Wipe old cache
-        localStorage.setItem('app_version', APP_VERSION);
-    }
-
-    // 1. Load from Cache IMMEDIATELY
-    loadFromCache();
-    
-    let mounted = true;
-    
-    // 2. Fetch Fresh Data (Background)
-    const initializeApp = async () => {
-        try {
-            await Promise.all([fetchCourses(), fetchSettings()]);
-            
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
+    const init = async () => {
+        await Promise.all([fetchCourses(), fetchSettings()]);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+            if (!user || user.id !== session.user.id) {
                 await fetchProfile(session.user.id, session.user.email);
             }
-        } catch (e) {
-            console.error("Init Error:", e);
-        } finally {
-            if (mounted) setLoading(false);
         }
     };
-    
-    initializeApp();
+    init();
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
@@ -308,7 +262,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     });
     
-    return () => { mounted = false; subscription.unsubscribe(); };
+    return () => subscription.unsubscribe();
   }, []);
 
   const value = useMemo(() => ({
@@ -317,7 +271,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     login, signOut, checkAccess, saveLessonProgress, getLessonProgress,
     coursesLoading,
     refreshData: () => { fetchCourses(); fetchSettings(); }
-  }), [user, loading, courses, enrollments, siteSettings, coursesLoading, fetchCourses, fetchSettings]);
+  }), [user, loading, courses, enrollments, siteSettings, coursesLoading]);
 
   return (
     <StoreContext.Provider value={value}>
