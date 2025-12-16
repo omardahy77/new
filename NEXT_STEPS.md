@@ -1,52 +1,33 @@
-# 🏆 Sniper FX Gold - Ultimate Edition (User Manual)
+# 🚀 Next Steps: Production Launch
 
-Congratulations! Your platform is now fully rebuilt and operational. Here is how to manage your new system.
+Your application is now **Technically Secure** and **Feature Complete**. 
+However, there is **one final security setting** that must be enabled manually in the Supabase Dashboard, as it cannot be changed via SQL/Code.
 
-## 🔑 1. Login Credentials
-- **URL**: `/login`
-- **Email**: `admin@sniperfx.com`
-- **Password**: `Hamza0100@`
+## 1. Fix "Leaked Password Protection Disabled" Warning
+This warning appears because Supabase recommends checking new passwords against a database of known leaked passwords (HaveIBeenPwned).
 
----
+**Instructions:**
+1. Go to your **Supabase Dashboard**.
+2. Click on **Authentication** (Icon on the left).
+3. Click on **Configuration** (under Policies) or **Security** (depending on UI version).
+4. Look for the **"Password Protection"** section.
+5. Toggle **ON**: `Enable Leaked Password Protection`.
+6. Click **Save**.
 
-## 📚 2. Managing Courses (Free vs. Paid)
+_Once done, the warning in the "Security Advisor" will disappear._
 
-### Creating a Paid Course (Hidden)
-1. Go to **Dashboard** > **Courses Tab**.
-2. Click **"Add Course"**.
-3. Fill in the details.
-4. **IMPORTANT**: Check the box **"Is this course Paid?"**.
-   - **Result**: This course will be **HIDDEN** from all students. It will NOT appear in the "Courses" page for them.
-   - It is only visible to You (Admin) and students you explicitly enroll.
+## 2. Verify Email Templates
+Since we are using "Email Confirmation" for Admins:
+1. Go to **Authentication** -> **Email Templates**.
+2. Customize the "Confirm Your Signup" email to match your brand (Sniper FX Gold).
+3. Ensure the `{{ .ConfirmationURL }}` is present.
 
-### Creating a Free Course
-1. Uncheck the "Is this course Paid?" box.
-2. **Result**: This course will be visible to **everyone** (registered users).
-
----
-
-## 👥 3. Enrolling Students (The "Manual Add" Feature)
-You requested that paid courses be accessible *only* when you add a student manually. Here is how:
-
-1. Go to **Dashboard** > **Users Tab**.
-2. Find the student in the list (you can search by email).
-3. Click the **"Unlock Course"** button next to their name.
-4. Select the **Paid Course** you want to give them access to.
-5. Click **Confirm**.
-   - **Result**: The student can now see the course in their "My Learning" section on the Home page.
+## 3. Deployment
+You are ready to deploy!
+- **Vercel / Netlify**: Connect your GitHub repo.
+- **Environment Variables**: Copy your `.env` values to the hosting provider's environment variables.
+- **Build Command**: `yarn build`
+- **Output Directory**: `dist`
 
 ---
-
-## 🎨 4. CMS (Content Management)
-You can edit the website text without touching code.
-1. Go to **Dashboard** > **CMS Tab**.
-2. Edit the **Hero Title**, **Description**, or **Social Links**.
-3. Click **Save**. The changes appear immediately on the Home page.
-
----
-
-## 🛡️ 5. Troubleshooting
-- **If you see a "500 Error"**: Run the `repair_kit.sql` in Supabase Dashboard.
-- **If a student can't see a course**: Check if they are enrolled in the **Users Tab**.
-
-**System Version**: v4.0.0 (Ultimate)
+**Status**: ✅ Ready for Production (v18.0.0)

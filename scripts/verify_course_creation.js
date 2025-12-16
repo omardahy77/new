@@ -44,7 +44,7 @@ async function verifyCourseCreation() {
       description: 'Automated Test Course',
       is_paid: false,
       level: 'beginner',
-      thumbnail: 'https://img-wrapper.vercel.app/image?url=https://placehold.co/600x400'
+      thumbnail: 'https://img-wrapper.vercel.app/image?url=https://img-wrapper.vercel.app/image?url=https://placehold.co/600x400'
     })
     .select()
     .single();

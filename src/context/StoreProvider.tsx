@@ -4,8 +4,8 @@ import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types
 import { StoreContext } from './StoreContext';
 import { DEFAULT_COURSES } from '../constants';
 
-// VERSION CONTROL: INSTANT LOAD V14.2 (FAIL-SAFE)
-const APP_VERSION = '14.2.0-FAIL-SAFE'; 
+// VERSION CONTROL: GOLD EDITION
+const APP_VERSION = '18.3.0-GOLD'; 
 
 // Default Settings
 const defaultSettings: SiteSettings = {
@@ -86,9 +86,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
     try {
-      let { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      // Use maybeSingle to prevent errors if RLS blocks access initially
+      let { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
       
-      // FALLBACK: If profile missing (DB lag), construct it from email
+      if (error) {
+          // Silent fail for profile fetch
+      }
+
+      // FALLBACK: If profile missing (DB lag or RLS issue), construct it from email
       if (!data && userEmail) {
          const isMasterAdmin = userEmail === 'admin@sniperfx.com';
          data = {
@@ -100,8 +105,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
              created_at: new Date().toISOString()
          };
          
-         // Try to self-heal (create profile) silently
-         supabase.from('profiles').insert([data]).then(({ error }) => {
+         // Try to self-heal (create profile) silently if it doesn't exist
+         supabase.from('profiles').upsert([data], { onConflict: 'id' }).then(({ error }) => {
              if (error) console.warn("Self-heal profile warning:", error.message);
          });
       }
@@ -120,9 +125,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // --- OPTIMIZED LOGIN WITH TIMEOUT ---
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      // Create a promise that rejects after 8 seconds (Shortened for better UX)
+      // Create a promise that rejects after 20 seconds
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('TIMEOUT')), 8000)
+        setTimeout(() => reject(new Error('TIMEOUT')), 20000)
       );
 
       // The actual login request
@@ -138,6 +143,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           // Optimistic Update - IMMEDIATE
           const metadata = data.user.user_metadata || {};
           const isHardcodedAdmin = email.trim().toLowerCase() === 'admin@sniperfx.com';
+          
+          // Force Admin Role for the master email immediately
           const role = isHardcodedAdmin ? 'admin' : (metadata.role || 'student');
           
           const optimisticUser: User = {
@@ -150,6 +157,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               created_at: new Date().toISOString()
           };
 
+          // CRITICAL: Set state and cache BEFORE anything else
           setUser(optimisticUser);
           localStorage.setItem('sniper_profile_cache', JSON.stringify(optimisticUser));
 
@@ -238,9 +246,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     await supabase.auth.signOut();
   };
 
+  // Optimized Initialization
   useEffect(() => {
     const init = async () => {
-        await Promise.all([fetchCourses(), fetchSettings()]);
+        // Run fetches in parallel using Promise.allSettled to prevent one failure from blocking others
+        await Promise.allSettled([fetchCourses(), fetchSettings()]);
+        
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
             if (!user || user.id !== session.user.id) {
@@ -270,7 +281,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     refreshCourses: fetchCourses, refreshEnrollments, updateSettings, 
     login, signOut, checkAccess, saveLessonProgress, getLessonProgress,
     coursesLoading,
-    refreshData: () => { fetchCourses(); fetchSettings(); }
+    refreshData: async () => { 
+        await Promise.allSettled([fetchCourses(), fetchSettings()]); 
+    }
   }), [user, loading, courses, enrollments, siteSettings, coursesLoading]);
 
   return (

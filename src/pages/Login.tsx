@@ -46,13 +46,13 @@ export const Login: React.FC = () => {
     setShake(false);
     setShowForceReload(false);
     
-    // Safety Timeout: If login takes more than 8 seconds, show "Force Reload" option
+    // Safety Timeout: If login takes more than 20 seconds, show "Force Reload" option
     const safetyTimer = setTimeout(() => {
         if (isSubmitting) {
             setShowForceReload(true);
             setError('استجابة الخادم بطيئة جداً. يرجى التحقق من الإنترنت أو إعادة تحميل الصفحة.');
         }
-    }, 8000);
+    }, 20000);
 
     try {
       const normalizedEmail = email.trim().toLowerCase();
@@ -67,8 +67,18 @@ export const Login: React.FC = () => {
               throw new Error('ACCOUNT_BANNED');
           }
           
+          // ⚡ TURBO MODE FOR ADMIN: Navigate IMMEDIATELY
+          // We skip the toast delay for admins to make it feel instant
+          if (loggedInUser.role === 'admin') {
+              navigate('/admin', { replace: true });
+              // Show toast in background
+              setTimeout(() => showToast(t('welcome_back'), 'success'), 300);
+              return;
+          }
+
+          // Normal flow for students
           showToast(t('welcome_back'), 'success');
-          navigate(loggedInUser.role === 'admin' ? '/admin' : '/', { replace: true });
+          navigate('/', { replace: true });
       } else {
           throw new Error('Login failed');
       }
