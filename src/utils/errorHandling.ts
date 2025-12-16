@@ -12,26 +12,28 @@ export const getErrorMessage = (error: any, lang: Language): string => {
   // 1. LOGIN & AUTH ERRORS
   if (message.includes('Invalid login credentials') || message.includes('invalid_grant')) {
     return lang === 'ar' 
-      ? 'بيانات الدخول غير صحيحة. يرجى التأكد من البريد الإلكتروني وكلمة المرور.' 
-      : 'Incorrect email or password. Please check your credentials.';
+      ? 'معلومات الحساب خاطئة. يرجى التأكد من البريد الإلكتروني وكلمة المرور.' 
+      : 'Invalid account info. Please check your credentials.';
   }
 
+  // CUSTOM STATUS: PENDING
   if (message === 'ACCOUNT_PENDING') {
     return lang === 'ar'
-      ? 'حسابك قيد المراجعة حالياً. سيصلك إشعار فور تفعيل الحساب من قبل الإدارة.'
-      : 'Your account is under review. You will be notified once approved by the admin.';
+      ? 'طلبك قيد المراجعة وانتظار قبوله من المشرف.'
+      : 'Your request is under review, waiting for admin approval.';
   }
 
+  // CUSTOM STATUS: BANNED
   if (message === 'ACCOUNT_BANNED') {
     return lang === 'ar'
-      ? 'تم إيقاف هذا الحساب. يرجى التواصل مع الدعم الفني للمساعدة.'
-      : 'This account has been suspended. Please contact support.';
+      ? 'تم إيقاف هذا الحساب من قبل الإدارة.'
+      : 'This account has been suspended by the admin.';
   }
 
   if (message === 'ACCOUNT_DELETED' || message.includes('User not found')) {
     return lang === 'ar'
-      ? 'هذا الحساب غير موجود في سجلاتنا. يرجى إنشاء حساب جديد.'
-      : 'Account not found. Please register a new account.';
+      ? 'معلومات الحساب خاطئة.'
+      : 'Invalid account info.';
   }
 
   if (message.includes('Email not confirmed')) {

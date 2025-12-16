@@ -38,7 +38,7 @@ export const Register: React.FC = () => {
       if (signUpError) throw signUpError;
 
       if (authData.user) {
-        await supabase.auth.signOut(); // Ensure logged out
+        await supabase.auth.signOut(); // Ensure logged out so they don't bypass pending check
         setSuccess(true);
       }
     } catch (err: any) {
@@ -59,8 +59,8 @@ export const Register: React.FC = () => {
           <h2 className="text-3xl font-bold text-white mb-4">{t('request_sent')}</h2>
           <p className="text-gray-400 mb-10 leading-relaxed text-lg">
             {language === 'ar' 
-             ? 'تم التسجيل بنجاح! يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب، ثم سيتم مراجعته من قبل الإدارة.'
-             : 'Registration successful! Please check your email to confirm your account before admin review.'}
+             ? 'تم إرسال طلبك بنجاح! حسابك الآن قيد المراجعة من قبل المشرف. سيتم تفعيله قريباً.'
+             : 'Request sent successfully! Your account is now under review by the admin. It will be activated soon.'}
           </p>
           <Link to="/" className="btn-gold w-full block py-4 text-center text-lg shadow-lg shadow-gold-500/10 font-bold hover:-translate-y-1 transition-transform">{t('back_home')}</Link>
         </div>

@@ -87,7 +87,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
   // 2. RAW EMBED CODE (The "Radical" Solution)
   if (type === 'embed') {
       return (
-          <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-full bg-black flex items-center justify-center overflow-hidden aspect-video">
              {/* We inject the HTML directly. We wrap it in a div that forces responsive behavior */}
              <div 
                 className="w-full h-full flex items-center justify-center [&>iframe]:w-full [&>iframe]:h-full [&>iframe]:border-0 [&>div]:w-full [&>div]:h-full"
@@ -100,7 +100,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
   // 3. FALLBACK IFRAME (For unknown URLs)
   if (type === 'iframe') {
       return (
-          <div className="relative w-full h-full bg-black">
+          <div className="relative w-full h-full bg-black aspect-video">
              <iframe
                 src={processedUrl}
                 className="w-full h-full border-0"
@@ -114,7 +114,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ url, lessonId, subtitl
 
   // 4. REACT PLAYER (Standard)
   return (
-    <div className="relative w-full h-full bg-black group">
+    <div className="relative w-full h-full bg-black group aspect-video">
       {!ready && (
         <div className="absolute inset-0 flex items-center justify-center z-20 bg-black/50">
           <Loader2 className="animate-spin text-gold-500 w-10 h-10" />

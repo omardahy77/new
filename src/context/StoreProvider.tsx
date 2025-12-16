@@ -101,7 +101,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
              email: userEmail,
              full_name: userEmail.split('@')[0] || 'User',
              role: isMasterAdmin ? 'admin' : 'student',
-             status: isMasterAdmin ? 'active' : 'pending',
+             status: isMasterAdmin ? 'active' : 'pending', // Default to pending for safety
              created_at: new Date().toISOString()
          };
          
@@ -122,55 +122,62 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  // --- OPTIMIZED LOGIN WITH TIMEOUT ---
+  // --- OPTIMIZED LOGIN WITH STATUS CHECK ---
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      // Create a promise that rejects after 20 seconds
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('TIMEOUT')), 20000)
-      );
-
-      // The actual login request
-      const loginRequest = supabase.auth.signInWithPassword({ email, password });
-
-      // Race them
-      const result: any = await Promise.race([loginRequest, timeoutPromise]);
-      
-      const { data, error } = result;
+      // 1. Authenticate
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
       
       if (data.user) {
-          // Optimistic Update - IMMEDIATE
-          const metadata = data.user.user_metadata || {};
+          // 2. Fetch REAL Profile to check Status (CRITICAL FOR APPROVAL WORKFLOW)
+          // We cannot rely on optimistic updates here because we need to know if they are 'pending'
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+          if (profileError) {
+             // If profile fetch fails, it might be a new user or RLS issue. 
+             // Assume pending unless it's the master admin.
+             if (email === 'admin@sniperfx.com') {
+                 // Allow master admin
+             } else {
+                 // For safety, if we can't verify status, treat as pending/error
+                 console.warn("Could not verify profile status");
+             }
+          }
+
           const isHardcodedAdmin = email.trim().toLowerCase() === 'admin@sniperfx.com';
-          
-          // Force Admin Role for the master email immediately
-          const role = isHardcodedAdmin ? 'admin' : (metadata.role || 'student');
-          
-          const optimisticUser: User = {
+          const status = isHardcodedAdmin ? 'active' : (profile?.status || 'pending');
+          const role = isHardcodedAdmin ? 'admin' : (profile?.role || 'student');
+
+          const userObj: User = {
               id: data.user.id,
               email: data.user.email!,
-              full_name: metadata.full_name || data.user.email?.split('@')[0],
-              phone_number: metadata.phone_number,
+              full_name: profile?.full_name || data.user.user_metadata?.full_name || data.user.email?.split('@')[0],
+              phone_number: profile?.phone_number,
               role: role as 'admin' | 'student',
-              status: 'active', 
+              status: status as 'active' | 'pending' | 'banned',
               created_at: new Date().toISOString()
           };
 
-          // CRITICAL: Set state and cache BEFORE anything else
-          setUser(optimisticUser);
-          localStorage.setItem('sniper_profile_cache', JSON.stringify(optimisticUser));
-
-          // Background sync (don't await)
-          fetchProfile(data.user.id, data.user.email);
+          // 3. Handle Status Logic
+          if (status === 'active') {
+             setUser(userObj);
+             localStorage.setItem('sniper_profile_cache', JSON.stringify(userObj));
+             await fetchProfile(data.user.id, data.user.email);
+          } else {
+             // If pending or banned, DO NOT set global user state yet.
+             // The Login page will handle the error message.
+             await supabase.auth.signOut(); // Immediately sign out from Supabase auth session
+          }
           
-          return optimisticUser;
+          return userObj;
       }
       return null;
     } catch (err: any) {
-      if (err.message === 'TIMEOUT') {
-          throw new Error('استجابة الخادم بطيئة جداً. يرجى المحاولة مرة أخرى.');
-      }
       throw err;
     }
   };
@@ -249,7 +256,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Optimized Initialization
   useEffect(() => {
     const init = async () => {
-        // Run fetches in parallel using Promise.allSettled to prevent one failure from blocking others
         await Promise.allSettled([fetchCourses(), fetchSettings()]);
         
         const { data: { session } } = await supabase.auth.getSession();

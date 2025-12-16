@@ -46,7 +46,7 @@ export const Login: React.FC = () => {
     setShake(false);
     setShowForceReload(false);
     
-    // Safety Timeout: If login takes more than 20 seconds, show "Force Reload" option
+    // Safety Timeout
     const safetyTimer = setTimeout(() => {
         if (isSubmitting) {
             setShowForceReload(true);
@@ -63,15 +63,17 @@ export const Login: React.FC = () => {
       clearTimeout(safetyTimer);
 
       if (loggedInUser) {
+          // CHECK STATUS
+          if (loggedInUser.status === 'pending') {
+              throw new Error('ACCOUNT_PENDING');
+          }
           if (loggedInUser.status === 'banned') {
               throw new Error('ACCOUNT_BANNED');
           }
           
-          // ⚡ TURBO MODE FOR ADMIN: Navigate IMMEDIATELY
-          // We skip the toast delay for admins to make it feel instant
+          // ⚡ TURBO MODE FOR ADMIN
           if (loggedInUser.role === 'admin') {
               navigate('/admin', { replace: true });
-              // Show toast in background
               setTimeout(() => showToast(t('welcome_back'), 'success'), 300);
               return;
           }

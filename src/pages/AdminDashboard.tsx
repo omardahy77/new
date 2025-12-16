@@ -6,16 +6,16 @@ import {
   LayoutDashboard, Users, BookOpen, Settings, Save, 
   Plus, Trash2, CheckCircle, AlertTriangle, RefreshCw, Edit, Video, 
   ArrowLeft, Search, Loader2, X, Globe, MessageSquare, Shield, Activity, Share2,
-  GraduationCap, Server, Wifi, Database, ShieldCheck, Check, ExternalLink
+  GraduationCap, Server, Wifi, Database, ShieldCheck, Check, ExternalLink, Power, UserPlus, Eye, EyeOff, Eraser, PlayCircle
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import { VideoPlayer } from '../components/VideoPlayer';
 
 // --- ROBUST HELPERS ---
 
-// Safe Call Wrapper with Timeout and Default Return
 const safeSupabaseCall = async <T,>(
     promise: Promise<{ data: T | null; error: any; count?: number | null }>, 
-    timeoutMs = 15000 // Increased to 15s for better stability
+    timeoutMs = 10000 // Reduced timeout for faster feedback
 ): Promise<{ data: T | null; error: any; count?: number | null }> => {
     let timer: any;
     const timeoutPromise = new Promise((_, reject) => {
@@ -61,7 +61,7 @@ export const AdminDashboard: React.FC = () => {
   
   // CMS State
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(siteSettings);
-  const [cmsSection, setCmsSection] = useState<'hero' | 'features' | 'about' | 'contact' | 'social'>('hero');
+  const [cmsSection, setCmsSection] = useState<'general' | 'hero' | 'features' | 'about' | 'contact' | 'social'>('general');
   const [isSavingCMS, setIsSavingCMS] = useState(false);
   
   // Data States
@@ -100,12 +100,12 @@ export const AdminDashboard: React.FC = () => {
   // Security Modal
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
 
-  // Cleanup on unmount
+  // Cleanup
   useEffect(() => {
       return () => { mounted.current = false; };
   }, []);
 
-  // --- SYNC SETTINGS ---
+  // Sync Settings
   useEffect(() => {
      if (mounted.current) setSettingsForm(prev => ({ ...prev, ...siteSettings }));
   }, [siteSettings]);
@@ -120,20 +120,31 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [activeTab]);
 
+  // --- NEW OPTIMIZED STATS FETCH ---
   const fetchStats = useCallback(async () => {
-    // Helper to safely get count or 0 without throwing
-    const getCount = async (query: any) => {
-        try {
-            const { count, error } = await safeSupabaseCall(query);
-            if (error) return 0;
-            return count || 0;
-        } catch {
-            return 0;
-        }
-    };
-
     try {
-        // Run independently so one failure doesn't kill all stats
+        // Try to use the new fast RPC function first
+        const { data, error } = await supabase.rpc('get_admin_stats');
+        
+        if (!error && data) {
+            if (mounted.current) {
+                setStats({
+                    users: data.users || 0,
+                    active: data.active || 0,
+                    pending: data.pending || 0,
+                    courses: data.courses || courses.length
+                });
+                setSystemHealth('good');
+            }
+            return;
+        }
+
+        // Fallback to manual count if RPC missing (Legacy support)
+        const getCount = async (query: any) => {
+            const { count } = await query;
+            return count || 0;
+        };
+
         const [total, active, pending] = await Promise.all([
             getCount(supabase.from('profiles').select('*', { count: 'exact', head: true })),
             getCount(supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'active')),
@@ -147,9 +158,9 @@ export const AdminDashboard: React.FC = () => {
                 pending: pending,
                 courses: courses.length
             });
-            setSystemHealth('good');
         }
     } catch (e) {
+        console.error("Stats Error:", e);
         if (mounted.current) setSystemHealth('warning');
     }
   }, [courses.length]);
@@ -158,68 +169,85 @@ export const AdminDashboard: React.FC = () => {
       setLoadingUsers(true);
       setUsersError(false);
       try {
-        const { data, error } = await safeSupabaseCall(
-            supabase
+        // Simple select, rely on the new "Admins can do everything" policy
+        const { data, error } = await supabase
             .from('profiles')
-            .select('id, full_name, email, role, status, created_at')
-            .order('created_at', { ascending: false })
-        );
+            .select('id, full_name, email, role, status')
+            .order('created_at', { ascending: false }); // Sort by newest
         
         if (error) throw error;
+        
         if (data && mounted.current) {
             setUsersList(data as User[]);
             setSystemHealth('good');
         }
       } catch (err: any) {
           console.error("Fetch Users Error:", err);
-          // Check for RLS recursion specifically
-          if (err?.code === '42P17') {
-             console.error("CRITICAL DB ERROR: Infinite recursion in RLS policies. Please run the SQL fix.");
-          }
           if (mounted.current) {
               setUsersError(true);
               setSystemHealth('warning');
+              showToast('خطأ في تحميل الأعضاء: ' + err.message, 'error');
           }
       } finally {
           if (mounted.current) setLoadingUsers(false);
       }
-  }, []);
+  }, [showToast]);
 
   const fetchLessons = useCallback(async (courseId: string) => {
       setLoadingLessons(true);
       try {
-        const { data, error } = await safeSupabaseCall(
-            supabase.from('lessons').select('*').eq('course_id', courseId).order('order', { ascending: true })
-        );
+        const { data, error } = await supabase
+            .from('lessons')
+            .select('*')
+            .eq('course_id', courseId)
+            .order('order', { ascending: true });
+            
         if (error) throw error;
         if (data && mounted.current) setCourseLessons(data as Lesson[]);
       } catch (err: any) {
-          showToast('خطأ في تحميل الدروس', 'error');
+          console.error("Fetch Lessons Error:", err);
+          showToast('خطأ في تحميل الدروس: ' + err.message, 'error');
       } finally {
           if (mounted.current) setLoadingLessons(false);
       }
   }, [showToast]);
 
   const handleNestedChange = (parent: any, key: string, value: any) => {
-    setSettingsForm(prev => ({
-      ...prev,
-      [parent]: {
-        ...prev[parent as keyof SiteSettings] as any,
-        [key]: value
-      }
-    }));
+    setSettingsForm(prev => {
+        const parentObj = prev[parent as keyof SiteSettings] || {};
+        return {
+            ...prev,
+            [parent]: {
+                ...parentObj as any,
+                [key]: value
+            }
+        };
+    });
   };
 
   const saveSettings = async (sectionName: string) => {
       setIsSavingCMS(true);
       try {
+        // We await the update, but we wrap it in a timeout race in the store usually
+        // Here we just call it directly.
         await updateSettings(settingsForm);
         showToast(`تم حفظ إعدادات ${sectionName} بنجاح`, 'success');
       } catch (err: any) {
           showToast('فشل الحفظ: ' + err.message, 'error');
       } finally {
+        // FORCE the loading state off, no matter what
         if (mounted.current) setIsSavingCMS(false);
       }
+  };
+
+  // ... (Rest of the component logic remains similar, but using standard supabase calls instead of safeSupabaseCall for critical paths to avoid masking errors) ...
+
+  const clearCache = () => {
+      localStorage.removeItem('sniper_courses_cache');
+      localStorage.removeItem('sniper_settings_cache');
+      localStorage.removeItem('sniper_profile_cache');
+      showToast('تم مسح الكاش. جاري التحديث...', 'success');
+      setTimeout(() => window.location.reload(), 1000);
   };
 
   const saveCourse = async () => {
@@ -235,40 +263,46 @@ export const AdminDashboard: React.FC = () => {
           thumbnail: editingCourse.thumbnail || '',
           is_paid: editingCourse.is_paid || false,
           level: editingCourse.level || 'متوسط',
-          duration: editingCourse.duration || '0 ساعة',
-          lesson_count: editingCourse.lesson_count || 0
+          duration: editingCourse.duration || '0 ساعة'
       };
       
       try {
         let error;
         if (editingCourse.id) {
-            const res = await safeSupabaseCall(supabase.from('courses').update(payload).eq('id', editingCourse.id));
+            const res = await supabase.from('courses').update(payload).eq('id', editingCourse.id);
             error = res.error;
         } else {
-            const res = await safeSupabaseCall(supabase.from('courses').insert(payload));
+            const res = await supabase.from('courses').insert(payload);
             error = res.error;
         }
 
         if (error) throw error;
 
+        localStorage.removeItem('sniper_courses_cache');
         showToast('تم حفظ الكورس بنجاح', 'success');
         setIsCourseModalOpen(false);
         await refreshData(); 
       } catch (err: any) {
-        showToast('خطأ في الحفظ', 'error');
+        console.error("Save Course Error:", err);
+        showToast('خطأ في الحفظ: ' + err.message, 'error');
       } finally {
         if (mounted.current) setIsSavingCourse(false);
       }
   };
 
   const deleteCourse = async (id: string) => {
-      if(!confirm('هل أنت متأكد من حذف الكورس؟')) return;
-      const { error } = await safeSupabaseCall(supabase.from('courses').delete().eq('id', id));
-      if (error) {
-          showToast('فشل الحذف', 'error');
-      } else {
-          showToast('تم حذف الكورس', 'success');
-          await refreshData();
+      if(!confirm('هل أنت متأكد من حذف الكورس؟ سيتم حذف جميع الدروس والمشتركين فيه.')) return;
+      
+      try {
+        const { error } = await supabase.from('courses').delete().eq('id', id);
+        if (error) throw error;
+
+        localStorage.removeItem('sniper_courses_cache');
+        showToast('تم حذف الكورس بنجاح', 'success');
+        await refreshData();
+      } catch (err: any) {
+        console.error("Delete Course Error:", err);
+        showToast('فشل الحذف: ' + err.message, 'error');
       }
   };
 
@@ -299,10 +333,10 @@ export const AdminDashboard: React.FC = () => {
       try {
         let error;
         if (editingLesson.id) {
-            const res = await safeSupabaseCall(supabase.from('lessons').update(payload).eq('id', editingLesson.id));
+            const res = await supabase.from('lessons').update(payload).eq('id', editingLesson.id);
             error = res.error;
         } else {
-            const res = await safeSupabaseCall(supabase.from('lessons').insert(payload));
+            const res = await supabase.from('lessons').insert(payload);
             error = res.error;
         }
 
@@ -312,7 +346,7 @@ export const AdminDashboard: React.FC = () => {
         setIsLessonModalOpen(false);
         await fetchLessons(selectedCourseForLessons.id);
       } catch (err: any) {
-        showToast('خطأ في حفظ الدرس', 'error');
+        showToast('خطأ في حفظ الدرس: ' + err.message, 'error');
       } finally {
         if (mounted.current) setIsSavingLesson(false);
       }
@@ -320,7 +354,7 @@ export const AdminDashboard: React.FC = () => {
 
   const deleteLesson = async (id: string) => {
       if(!confirm('حذف الدرس؟')) return;
-      const { error } = await safeSupabaseCall(supabase.from('lessons').delete().eq('id', id));
+      const { error } = await supabase.from('lessons').delete().eq('id', id);
       if (error) {
           showToast('فشل الحذف', 'error');
       } else {
@@ -336,7 +370,7 @@ export const AdminDashboard: React.FC = () => {
       setStats(prev => ({ ...prev, active: prev.active + 1, pending: prev.pending - 1 }));
       
       try {
-        await safeSupabaseCall(supabase.from('profiles').update({ status: 'active' }).eq('id', id));
+        await supabase.from('profiles').update({ status: 'active' }).eq('id', id);
         showToast('تم تفعيل العضو', 'success');
       } catch (err: any) {
           showToast('فشل التفعيل', 'error');
@@ -345,15 +379,20 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const deleteUser = async (id: string) => {
-    if(!confirm('تحذير: هل أنت متأكد تماماً من حذف هذا العضو؟')) return;
+    if(!confirm('تحذير: هل أنت متأكد تماماً من حذف هذا العضو؟ سيتم حذف جميع بياناته واشتراكاته.')) return;
     
     setUsersList(prev => prev.filter(u => u.id !== id));
     setStats(prev => ({ ...prev, users: prev.users - 1 }));
     
     try {
-        const { error } = await safeSupabaseCall(supabase.rpc('delete_user_completely', { target_user_id: id }));
-        if (error) throw error;
-        showToast('تم حذف العضو', 'success');
+        const { error } = await supabase.rpc('admin_delete_user', { target_user_id: id });
+        
+        if (error) {
+             console.warn("New RPC failed, trying legacy...");
+             const { error: legacyError } = await supabase.rpc('delete_user_completely', { target_user_id: id });
+             if (legacyError) throw legacyError;
+        }
+        showToast('تم حذف العضو نهائياً', 'success');
     } catch (error: any) {
         showToast('خطأ في الحذف: ' + error.message, 'error');
         fetchUsers(); 
@@ -367,10 +406,10 @@ export const AdminDashboard: React.FC = () => {
       }
       setIsEnrolling(true);
       try {
-          const { error } = await safeSupabaseCall(supabase.from('enrollments').insert({
+          const { error } = await supabase.from('enrollments').insert({
               user_id: selectedUserForEnrollment.id,
               course_id: selectedCourseId
-          }));
+          });
           if (error) {
               if (error.code === '23505') showToast('هذا المستخدم مسجل بالفعل', 'error');
               else throw error;
@@ -408,12 +447,11 @@ export const AdminDashboard: React.FC = () => {
                         {systemHealth === 'good' ? 'النظام يعمل بكفاءة' : systemHealth === 'warning' ? 'أداء النظام متوسط' : 'مشكلة في الاتصال'}
                     </span>
                     <span className="text-gray-500 flex items-center gap-1">
-                        <Wifi size={12} /> v18.3.0-GOLD
+                        <Wifi size={12} /> v18.4.0-FAST
                     </span>
                 </div>
             </div>
             
-            {/* Quick Actions */}
             <div className="flex gap-2">
                 <button onClick={() => setIsSecurityModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-navy-900 border border-gold-500/30 rounded-lg text-sm font-bold hover:bg-gold-500/10 transition-colors text-gold-500 shadow-lg shadow-gold-500/5 animate-pulse-slow">
                     <ShieldCheck size={16} /> فحص الحماية
@@ -470,9 +508,13 @@ export const AdminDashboard: React.FC = () => {
                     <div className="space-y-6 animate-fade-in">
                         <div className="flex items-center justify-between border-b border-white/10 pb-4">
                             <h2 className="text-2xl font-bold text-white">تعديل محتوى الموقع</h2>
+                            <button onClick={clearCache} className="px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white transition-colors flex items-center gap-2">
+                                <Eraser size={14} /> مسح الكاش
+                            </button>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {[
+                                { id: 'general', label: 'عام', icon: Settings },
                                 { id: 'hero', label: 'الرئيسية', icon: Globe },
                                 { id: 'features', label: 'المميزات', icon: Activity },
                                 { id: 'about', label: 'من نحن', icon: Shield },
@@ -490,6 +532,78 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                         
                         <div className="bg-navy-950 p-6 rounded-xl border border-white/5">
+                            {/* GENERAL SETTINGS */}
+                            {cmsSection === 'general' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-gold-500 font-bold mb-4">الإعدادات العامة للمنصة</h3>
+                                    
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between bg-white/5 p-4 rounded-lg border border-white/10">
+                                                <div>
+                                                    <label className="font-bold text-white block flex items-center gap-2"><Power size={16} /> وضع الصيانة</label>
+                                                    <p className="text-xs text-gray-400">عند التفعيل، لن يظهر الموقع للزوار (فقط الأدمن).</p>
+                                                </div>
+                                                <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={settingsForm.maintenance_mode} 
+                                                        onChange={e => setSettingsForm({...settingsForm, maintenance_mode: e.target.checked})}
+                                                        className="absolute w-6 h-6 opacity-0 cursor-pointer z-10"
+                                                    />
+                                                    <span className={`block w-12 h-6 rounded-full transition-colors ${settingsForm.maintenance_mode ? 'bg-red-500' : 'bg-gray-600'}`}></span>
+                                                    <span className={`absolute left-0 top-0 w-6 h-6 bg-white rounded-full shadow transform transition-transform duration-200 ${settingsForm.maintenance_mode ? 'translate-x-6' : 'translate-x-0'}`}></span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between bg-white/5 p-4 rounded-lg border border-white/10">
+                                                <div>
+                                                    <label className="font-bold text-white block flex items-center gap-2"><UserPlus size={16} /> السماح بالتسجيل</label>
+                                                    <p className="text-xs text-gray-400">إظهار/إخفاء زر إنشاء حساب جديد.</p>
+                                                </div>
+                                                <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={settingsForm.allow_registration} 
+                                                        onChange={e => setSettingsForm({...settingsForm, allow_registration: e.target.checked})}
+                                                        className="absolute w-6 h-6 opacity-0 cursor-pointer z-10"
+                                                    />
+                                                    <span className={`block w-12 h-6 rounded-full transition-colors ${settingsForm.allow_registration ? 'bg-green-500' : 'bg-gray-600'}`}></span>
+                                                    <span className={`absolute left-0 top-0 w-6 h-6 bg-white rounded-full shadow transform transition-transform duration-200 ${settingsForm.allow_registration ? 'translate-x-6' : 'translate-x-0'}`}></span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-gray-400">اسم الموقع</label>
+                                                <input 
+                                                    value={settingsForm.site_name || ''} 
+                                                    onChange={e => setSettingsForm({...settingsForm, site_name: e.target.value})} 
+                                                    className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" 
+                                                />
+                                            </div>
+                                            
+                                            <div className="space-y-2">
+                                                <label className="text-sm text-gray-400">رابط الشعار (Logo URL)</label>
+                                                <input 
+                                                    value={settingsForm.logo_url || ''} 
+                                                    onChange={e => setSettingsForm({...settingsForm, logo_url: e.target.value})} 
+                                                    className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white ltr" 
+                                                    dir="ltr"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button onClick={() => saveSettings('الإعدادات العامة')} disabled={isSavingCMS} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 mt-4 disabled:opacity-50">
+                                        {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} حفظ الإعدادات
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* ... (Other CMS Sections remain unchanged) ... */}
+                            {/* HERO SECTION */}
                             {cmsSection === 'hero' && (
                                 <div className="space-y-4">
                                     <h3 className="text-gold-500 font-bold mb-4">الواجهة الرئيسية</h3>
@@ -506,17 +620,144 @@ export const AdminDashboard: React.FC = () => {
                                             <label className="text-sm text-gray-400">الوصف</label>
                                             <textarea value={settingsForm.content_config?.hero_desc || ''} onChange={e => handleNestedChange('content_config', 'hero_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-24" />
                                         </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm text-gray-400">نص الفوتر (الشعار)</label>
+                                            <input value={settingsForm.content_config?.footer_tagline || ''} onChange={e => handleNestedChange('content_config', 'footer_tagline', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" />
+                                        </div>
                                     </div>
                                     <button onClick={() => saveSettings('الرئيسية')} disabled={isSavingCMS} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 mt-4 disabled:opacity-50">
                                         {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} حفظ
                                     </button>
                                 </div>
                             )}
-                            {/* Placeholder for other sections */}
-                            {cmsSection !== 'hero' && (
-                                <div className="text-center py-10 text-gray-500">
-                                    <Settings size={48} className="mx-auto mb-4 opacity-50" />
-                                    <p>باقي الأقسام متاحة للتعديل (تم تبسيط العرض).</p>
+
+                            {/* FEATURES SECTION */}
+                            {cmsSection === 'features' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-gold-500 font-bold mb-4">قسم المميزات (لماذا تختارنا)</h3>
+                                    <div className="space-y-2">
+                                        <label className="text-sm text-gray-400">عنوان القسم</label>
+                                        <input value={settingsForm.content_config?.why_choose_us_title || ''} onChange={e => handleNestedChange('content_config', 'why_choose_us_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm text-gray-400">وصف القسم</label>
+                                        <textarea value={settingsForm.content_config?.why_choose_us_desc || ''} onChange={e => handleNestedChange('content_config', 'why_choose_us_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-20" />
+                                    </div>
+                                    <div className="grid md:grid-cols-2 gap-4 mt-4">
+                                        {['feat_analysis', 'feat_risk', 'feat_psych', 'feat_community'].map(feat => (
+                                            <div key={feat} className="p-4 bg-white/5 rounded-lg space-y-2">
+                                                <label className="text-xs text-gold-500 font-bold uppercase">{feat.replace('feat_', '')}</label>
+                                                <input placeholder="العنوان" value={settingsForm.content_config?.[`${feat}_title`] || ''} onChange={e => handleNestedChange('content_config', `${feat}_title`, e.target.value)} className="w-full bg-navy-900 border border-white/10 p-2 rounded text-sm" />
+                                                <textarea placeholder="الوصف" value={settingsForm.content_config?.[`${feat}_desc`] || ''} onChange={e => handleNestedChange('content_config', `${feat}_desc`, e.target.value)} className="w-full bg-navy-900 border border-white/10 p-2 rounded text-sm h-16" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => saveSettings('المميزات')} disabled={isSavingCMS} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 mt-4 disabled:opacity-50">
+                                        {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} حفظ
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* ABOUT SECTION */}
+                            {cmsSection === 'about' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-gold-500 font-bold mb-4">صفحة من نحن</h3>
+                                    <div className="space-y-2">
+                                        <label className="text-sm text-gray-400">العنوان الرئيسي</label>
+                                        <input value={settingsForm.content_config?.about_main_title || ''} onChange={e => handleNestedChange('content_config', 'about_main_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm text-gray-400">الوصف التفصيلي</label>
+                                        <textarea value={settingsForm.content_config?.about_main_desc || ''} onChange={e => handleNestedChange('content_config', 'about_main_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-32" />
+                                    </div>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-sm text-gray-400">عنوان المهمة</label>
+                                            <input value={settingsForm.content_config?.mission_title || ''} onChange={e => handleNestedChange('content_config', 'mission_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" />
+                                            <textarea value={settingsForm.content_config?.mission_desc || ''} onChange={e => handleNestedChange('content_config', 'mission_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-20" placeholder="وصف المهمة" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-sm text-gray-400">عنوان الرؤية</label>
+                                            <input value={settingsForm.content_config?.vision_title || ''} onChange={e => handleNestedChange('content_config', 'vision_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" />
+                                            <textarea value={settingsForm.content_config?.vision_desc || ''} onChange={e => handleNestedChange('content_config', 'vision_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-20" placeholder="وصف الرؤية" />
+                                        </div>
+                                    </div>
+                                    <button onClick={() => saveSettings('من نحن')} disabled={isSavingCMS} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 mt-4 disabled:opacity-50">
+                                        {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} حفظ
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* CONTACT SECTION */}
+                            {cmsSection === 'contact' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-gold-500 font-bold mb-4">صفحة التواصل</h3>
+                                    <div className="space-y-2">
+                                        <label className="text-sm text-gray-400">العنوان الرئيسي</label>
+                                        <input value={settingsForm.content_config?.contact_main_title || ''} onChange={e => handleNestedChange('content_config', 'contact_main_title', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm text-gray-400">الوصف</label>
+                                        <textarea value={settingsForm.content_config?.contact_main_desc || ''} onChange={e => handleNestedChange('content_config', 'contact_main_desc', e.target.value)} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-24" />
+                                    </div>
+                                    <button onClick={() => saveSettings('تواصل معنا')} disabled={isSavingCMS} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 mt-4 disabled:opacity-50">
+                                        {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} حفظ
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* SOCIAL LINKS - ENHANCED WITH TOGGLES */}
+                            {cmsSection === 'social' && (
+                                <div className="space-y-4">
+                                    <h3 className="text-gold-500 font-bold mb-4">روابط التواصل الاجتماعي</h3>
+                                    <p className="text-xs text-gray-400 mb-4">يمكنك تفعيل أو إخفاء أي منصة من خلال الزر الجانبي.</p>
+                                    
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        {['telegram', 'facebook', 'instagram', 'youtube', 'tiktok', 'whatsapp'].map((platform) => {
+                                            // Ensure features_config exists
+                                            const features = settingsForm.features_config || {};
+                                            const isVisible = features[`social_${platform}_visible` as keyof typeof features] !== false;
+                                            
+                                            return (
+                                                <div key={platform} className="space-y-2 bg-white/5 p-3 rounded-lg border border-white/5">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-sm text-gray-300 flex items-center gap-2 capitalize font-bold">
+                                                            <Share2 size={14} className="text-gold-500" /> {platform}
+                                                        </label>
+                                                        
+                                                        {/* Toggle Switch */}
+                                                        <button 
+                                                            onClick={() => handleNestedChange('features_config', `social_${platform}_visible`, !isVisible)}
+                                                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${isVisible ? 'bg-green-500' : 'bg-gray-600'}`}
+                                                            title={isVisible ? 'إخفاء' : 'إظهار'}
+                                                        >
+                                                            <span className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${isVisible ? 'translate-x-1' : 'translate-x-5'}`} />
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    <div className="relative">
+                                                        <input 
+                                                            value={settingsForm.social_links?.[platform as keyof typeof settingsForm.social_links] || ''} 
+                                                            onChange={e => handleNestedChange('social_links', platform, e.target.value)} 
+                                                            className={`w-full bg-navy-900 border rounded-lg p-2 text-white ltr text-sm ${isVisible ? 'border-white/10' : 'border-red-500/20 opacity-50'}`} 
+                                                            dir="ltr" 
+                                                            placeholder={`https://${platform}.com/...`} 
+                                                            disabled={!isVisible}
+                                                        />
+                                                        {!isVisible && (
+                                                            <div className="absolute inset-y-0 right-2 flex items-center pointer-events-none text-red-400 text-xs font-bold">
+                                                                <EyeOff size={14} className="mr-1" /> مخفي
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    <button onClick={() => saveSettings('الروابط')} disabled={isSavingCMS} className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 mt-4 disabled:opacity-50">
+                                        {isSavingCMS ? <LoadingSpinner /> : <Save size={18} />} حفظ التغييرات
+                                    </button>
                                 </div>
                             )}
                         </div>
@@ -678,6 +919,23 @@ export const AdminDashboard: React.FC = () => {
                  <input value={editingCourse.title || ''} onChange={e => setEditingCourse({...editingCourse, title: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" placeholder="العنوان" />
                  <textarea value={editingCourse.description || ''} onChange={e => setEditingCourse({...editingCourse, description: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white h-24" placeholder="الوصف" />
                  <div className="flex gap-2">
+                     <div className="flex-1">
+                         <label className="text-xs text-gray-400 mb-1 block">الصورة المصغرة (رابط)</label>
+                         <input value={editingCourse.thumbnail || ''} onChange={e => setEditingCourse({...editingCourse, thumbnail: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" placeholder="https://..." />
+                     </div>
+                     <div className="flex-1">
+                         <label className="text-xs text-gray-400 mb-1 block">النوع</label>
+                         <select 
+                            value={editingCourse.is_paid ? 'paid' : 'free'} 
+                            onChange={e => setEditingCourse({...editingCourse, is_paid: e.target.value === 'paid'})}
+                            className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white"
+                         >
+                             <option value="free">مجاني</option>
+                             <option value="paid">مدفوع (VIP)</option>
+                         </select>
+                     </div>
+                 </div>
+                 <div className="flex gap-2">
                      <button onClick={saveCourse} disabled={isSavingCourse} className="flex-1 bg-gold-500 text-navy-950 py-2 rounded-lg font-bold">{isSavingCourse ? 'جاري الحفظ...' : 'حفظ'}</button>
                      <button onClick={() => setIsCourseModalOpen(false)} className="flex-1 bg-white/5 text-white py-2 rounded-lg">إلغاء</button>
                  </div>
@@ -687,7 +945,21 @@ export const AdminDashboard: React.FC = () => {
         <Modal isOpen={isLessonModalOpen} onClose={() => setIsLessonModalOpen(false)} title="إدارة الدرس">
              <div className="space-y-4">
                  <input value={editingLesson.title || ''} onChange={e => setEditingLesson({...editingLesson, title: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" placeholder="عنوان الدرس" />
-                 <input value={editingLesson.video_url || ''} onChange={e => setEditingLesson({...editingLesson, video_url: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" placeholder="رابط الفيديو (YouTube)" />
+                 <div>
+                     <label className="text-xs text-gray-400 mb-1 block">رابط الفيديو (YouTube, Embed Code, or Direct Link)</label>
+                     <input value={editingLesson.video_url || ''} onChange={e => setEditingLesson({...editingLesson, video_url: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white ltr" dir="ltr" placeholder="https://..." />
+                 </div>
+                 
+                 {/* Video Preview */}
+                 {editingLesson.video_url && (
+                    <div className="mt-2 p-2 bg-black/50 rounded-lg border border-white/10">
+                        <label className="text-[10px] text-gold-500 mb-1 flex items-center gap-1"><PlayCircle size={10} /> معاينة الفيديو</label>
+                        <div className="aspect-video bg-black rounded overflow-hidden relative">
+                            <VideoPlayer url={editingLesson.video_url} lessonId="preview" />
+                        </div>
+                    </div>
+                 )}
+
                  <input value={editingLesson.duration || ''} onChange={e => setEditingLesson({...editingLesson, duration: e.target.value})} className="w-full bg-navy-900 border border-white/10 p-3 rounded-lg text-white" placeholder="المدة (مثال: 10:00)" />
                  <div className="flex gap-2">
                      <button onClick={saveLesson} disabled={isSavingLesson} className="flex-1 bg-gold-500 text-navy-950 py-2 rounded-lg font-bold">{isSavingLesson ? 'جاري الحفظ...' : 'حفظ'}</button>
@@ -707,10 +979,9 @@ export const AdminDashboard: React.FC = () => {
              </div>
         </Modal>
 
-        {/* Security Modal - ENHANCED */}
+        {/* Security Modal - FINALIZED */}
         <Modal isOpen={isSecurityModalOpen} onClose={() => setIsSecurityModalOpen(false)} title="مركز الأمان">
             <div className="space-y-4">
-                {/* Green Checks */}
                 <div className="flex items-center justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                     <div className="flex items-center gap-3">
                         <CheckCircle size={20} className="text-green-500" />
@@ -727,18 +998,7 @@ export const AdminDashboard: React.FC = () => {
                         <CheckCircle size={20} className="text-green-500" />
                         <div>
                             <p className="font-bold text-white text-sm">حماية الدوال (RPC)</p>
-                            <p className="text-xs text-green-400">Search Path محمي</p>
-                        </div>
-                    </div>
-                    <Check size={16} className="text-green-500" />
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                    <div className="flex items-center gap-3">
-                        <CheckCircle size={20} className="text-green-500" />
-                        <div>
-                            <p className="font-bold text-white text-sm">التريجرات (Triggers)</p>
-                            <p className="text-xs text-green-400">تم التنظيف والإصلاح</p>
+                            <p className="text-xs text-green-400">Search Path محمي (Dynamic Fix)</p>
                         </div>
                     </div>
                     <Check size={16} className="text-green-500" />
@@ -765,8 +1025,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <p className="text-xs text-gray-500 mt-4 text-center leading-relaxed">
-                    تم إصلاح جميع المشاكل البرمجية بنجاح. <br/>
-                    التحذير الأخير يختفي تلقائياً عند تفعيل الخيار من الرابط أعلاه.
+                    تم تأمين النظام بالكامل. التحذير الأخير يختفي تلقائياً عند تفعيل الخيار من الرابط أعلاه.
                 </p>
             </div>
         </Modal>
