@@ -3,7 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Logo } from '../components/Logo';
 import { useLanguage } from '../context/LanguageContext';
-import { User, Phone, Mail, Lock, Clock, AlertCircle, Loader2 } from 'lucide-react';
+import { getErrorMessage } from '../utils/errorHandling';
+import { User, Phone, Mail, Lock, Clock, AlertCircle, Loader2, CheckCircle } from 'lucide-react';
 
 export const Register: React.FC = () => {
   const [fullName, setFullName] = useState('');
@@ -13,7 +14,7 @@ export const Register: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const { t, dir } = useLanguage();
+  const { t, language, dir } = useLanguage();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,8 +22,7 @@ export const Register: React.FC = () => {
     setError('');
     
     try {
-      // 1. Create User (Supabase Auth)
-      // The Database Trigger we added will automatically create the profile in 'pending' status
+      // 1. Create User
       const { data: authData, error: signUpError } = await supabase.auth.signUp({ 
         email: email.trim().toLowerCase(), 
         password,
@@ -30,7 +30,7 @@ export const Register: React.FC = () => {
           data: {
             full_name: fullName,
             phone_number: phoneNumber,
-            role: 'student' // This is passed to the trigger
+            role: 'student'
           }
         }
       });
@@ -38,14 +38,12 @@ export const Register: React.FC = () => {
       if (signUpError) throw signUpError;
 
       if (authData.user) {
-        // Success! The trigger handles the rest.
-        // We sign out to ensure they don't access the system until approved.
-        await supabase.auth.signOut();
+        await supabase.auth.signOut(); // Ensure logged out
         setSuccess(true);
       }
     } catch (err: any) {
       console.error("Registration error:", err);
-      setError(err.message);
+      setError(getErrorMessage(err, language));
     } finally {
       setLoading(false);
     }
@@ -54,17 +52,17 @@ export const Register: React.FC = () => {
   if (success) {
     return (
       <div className="min-h-screen flex flex-col pt-[160px] pb-10 relative overflow-hidden items-center justify-center" dir={dir}>
-        <div className="glass-card p-10 max-w-md w-full text-center border-gold-500/30 shadow-[0_0_50px_rgba(255,215,0,0.1)] relative z-10">
+        <div className="glass-card p-10 max-w-md w-full text-center border-gold-500/30 shadow-[0_0_50px_rgba(255,215,0,0.1)] relative z-10 animate-fade-in">
           <div className="w-24 h-24 bg-gold-500/10 rounded-full flex items-center justify-center mx-auto mb-8 border border-gold-500/20 animate-pulse-slow">
-            <Clock size={48} className="text-gold-500" />
+            <CheckCircle size={48} className="text-gold-500" />
           </div>
           <h2 className="text-3xl font-bold text-white mb-4">{t('request_sent')}</h2>
           <p className="text-gray-400 mb-10 leading-relaxed text-lg">
-            {dir === 'rtl' 
-             ? 'تم استلام طلبك بنجاح! حسابك الآن قيد المراجعة من قبل الإدارة. سيتم تفعيله قريباً.'
-             : 'Your request has been received! Your account is pending approval from the administration.'}
+            {language === 'ar' 
+             ? 'تم التسجيل بنجاح! يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب، ثم سيتم مراجعته من قبل الإدارة.'
+             : 'Registration successful! Please check your email to confirm your account before admin review.'}
           </p>
-          <Link to="/" className="btn-gold w-full block py-4 text-center text-lg shadow-lg shadow-gold-500/10 font-bold">{t('back_home')}</Link>
+          <Link to="/" className="btn-gold w-full block py-4 text-center text-lg shadow-lg shadow-gold-500/10 font-bold hover:-translate-y-1 transition-transform">{t('back_home')}</Link>
         </div>
       </div>
     );
@@ -82,8 +80,8 @@ export const Register: React.FC = () => {
           <p className="text-center text-gray-400 mb-8 text-sm">{t('register_subtitle')}</p>
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3 font-bold">
-                <AlertCircle size={20} /> {error}
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3 font-bold animate-fade-in">
+                <AlertCircle size={20} className="shrink-0" /> {error}
             </div>
           )}
 
@@ -116,8 +114,8 @@ export const Register: React.FC = () => {
                 <Lock className={`absolute top-1/2 -translate-y-1/2 text-gray-500 ${dir === 'rtl' ? 'right-4' : 'left-4'}`} size={20} />
               </div>
             </div>
-            <button type="submit" disabled={loading} className="w-full bg-gold-500 hover:bg-gold-400 text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg flex items-center justify-center gap-2">
-              {loading ? <Loader2 className="animate-spin" /> : t('send_request')}
+            <button type="submit" disabled={loading} className="w-full bg-gold-500 hover:bg-gold-400 text-navy-950 font-bold py-4 rounded-xl transition-all shadow-lg shadow-gold-500/20 disabled:opacity-50 mt-4 text-lg flex items-center justify-center gap-2 hover:-translate-y-1 active:scale-95">
+              {loading ? <Loader2 className="animate-spin" size={24} /> : t('send_request')}
             </button>
           </form>
           <div className="mt-8 text-center text-sm text-gray-400">

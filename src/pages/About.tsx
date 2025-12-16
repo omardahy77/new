@@ -17,8 +17,8 @@ export const About: React.FC = () => {
   };
 
   const stats = [
-    { icon: Users, label: getContent('stats_students_label') || (language === 'ar' ? "متدرب نشط" : "Active Students"), value: siteSettings.stats.students || "+1500" },
-    { icon: Clock, label: getContent('stats_hours_label') || (language === 'ar' ? "ساعة تدريبية" : "Training Hours"), value: siteSettings.stats.hours || "+50" },
+    { icon: Users, label: getContent('stats_students_label') || (language === 'ar' ? "متدرب نشط" : "Active Students"), value: siteSettings.stats?.students || "+1500" },
+    { icon: Clock, label: getContent('stats_hours_label') || (language === 'ar' ? "ساعة تدريبية" : "Training Hours"), value: siteSettings.stats?.hours || "+50" },
     { icon: Headphones, label: getContent('stats_support_label') || (language === 'ar' ? "دعم فني" : "Support"), value: content.stats_support_value || "24/7" },
   ];
 

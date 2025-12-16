@@ -156,7 +156,7 @@ export const Home: React.FC = () => {
                  </div>
                  <div className="flex items-center gap-2">
                     <Users className="text-gold-500" size={20} />
-                    <span>{siteSettings.stats.students} {t('students_count')}</span>
+                    <span>{siteSettings.stats?.students || '0'} {t('students_count')}</span>
                  </div>
               </div>
             )}

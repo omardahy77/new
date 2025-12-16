@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { User, Course, SiteSettings, Enrollment, LessonProgress } from '../types';
 import { StoreContext } from './StoreContext';
-import { translations } from '../utils/translations';
 
-// VERSION CONTROL: FRESH START V8
-// This forces a complete system refresh
-const APP_VERSION = '8.0.0-DB-FIX'; 
+// VERSION CONTROL: FRESH START V11 (Turbo Cache)
+const APP_VERSION = '11.0.0-TURBO'; 
 
-// Default Settings (Fallback)
+// Default Settings
 const defaultSettings: SiteSettings = {
   site_name: "Sniper FX Gold",
   site_name_en: "Sniper FX Gold",
@@ -22,35 +20,11 @@ const defaultSettings: SiteSettings = {
   hero_desc_en: "Discover the secrets of market making... A complete, secure LMS taking you from zero to hero.",
   logo_url: "https://i.postimg.cc/Bb0PZ00P/tsmym-bdwn-wnwan-2.png",
   maintenance_mode: false,
-  stats: { students: "+1500", hours: "+50" },
-  social_links: { 
-    telegram: "https://t.me", 
-    instagram: "https://instagram.com", 
-    youtube: "",
-    facebook: "https://facebook.com",
-    tiktok: "",
-    twitter: "",
-    whatsapp: ""
-  },
-  home_features: [
-    { title: "تحليل فني متقدم", description: "تعلم استراتيجيات التحليل الفني التي تستخدمها البنوك الكبرى.", icon: "LineChart" },
-    { title: "إدارة مخاطر صارمة", description: "كيف تحمي رأس مالك وتضاعف أرباحك بأقل مخاطرة ممكنة.", icon: "Shield" },
-    { title: "سيكولوجية التداول", description: "التحكم في المشاعر والانضباط هو مفتاح النجاح في الأسواق.", icon: "Brain" },
-    { title: "مجتمع حصري", description: "تواصل مع نخبة المتداولين وتبادل الخبرات والفرص يومياً.", icon: "Users" }
-  ],
-  features_config: { 
-    show_coming_soon: true, 
-    show_stats: true, 
-    allow_registration: true,
-    social_facebook_visible: true,
-    social_instagram_visible: true,
-    social_telegram_visible: true,
-    social_youtube_visible: true,
-    social_tiktok_visible: true,
-    social_twitter_visible: true,
-    social_whatsapp_visible: true
-  },
-  content_config: {}
+  allow_registration: true,
+  social_links: {},
+  features_config: { show_coming_soon: true, show_stats: true, allow_registration: true },
+  content_config: {},
+  stats: { students: "+1500", hours: "+50" }
 };
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -61,21 +35,53 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [loading, setLoading] = useState(true);
   const [coursesLoading, setCoursesLoading] = useState(true);
 
-  // --- ROBUST PROFILE FETCHING ---
-  const fetchProfile = async (userId: string, userEmail?: string) => {
+  // --- CACHE HELPERS ---
+  const loadFromCache = () => {
     try {
-      // 1. Try to fetch profile from DB
+      const cachedSettings = localStorage.getItem('sniper_settings_cache');
+      const cachedCourses = localStorage.getItem('sniper_courses_cache');
+      const cachedProfile = localStorage.getItem('sniper_profile_cache');
+      
+      let hasCache = false;
+
+      if (cachedSettings) {
+        setSiteSettings(JSON.parse(cachedSettings));
+        hasCache = true;
+      }
+      
+      if (cachedCourses) {
+        setCourses(JSON.parse(cachedCourses));
+        hasCache = true;
+      }
+
+      if (cachedProfile) {
+        setUser(JSON.parse(cachedProfile));
+        hasCache = true;
+      }
+
+      // If we have cache, we can stop the global loading spinner immediately
+      // The fresh data will update in the background (Stale-While-Revalidate)
+      if (hasCache) {
+        setLoading(false);
+        setCoursesLoading(false);
+      }
+    } catch (e) {
+      console.error("Cache load error", e);
+    }
+  };
+
+  // Optimized Profile Fetch
+  const fetchProfile = useCallback(async (userId: string, userEmail?: string) => {
+    try {
       let { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
       
-      // 2. SELF-HEALING: If profile is missing (e.g. after DB reset), CREATE IT
+      // SELF-HEALING: Only run if profile is strictly missing
       if (!data && userEmail) {
-         console.log('🔧 Self-Healing: Creating missing profile for', userEmail);
          const isMasterAdmin = userEmail === 'admin@sniperfx.com';
-         
          const newProfile = {
              id: userId,
              email: userEmail,
@@ -84,43 +90,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
              status: isMasterAdmin ? 'active' : 'pending'
          };
 
-         // Try INSERT
-         const { data: createdProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert([newProfile])
-            .select()
-            .single();
-            
-         if (!createError) {
-             data = createdProfile;
-         } else {
-             // Fallback to memory if insert fails (rare)
-             console.warn('⚠️ Self-Healing Insert Failed:', createError.message);
-             data = newProfile as any;
-         }
+         const { data: createdProfile } = await supabase.from('profiles').insert([newProfile]).select().single();
+         if (createdProfile) data = createdProfile;
       }
 
       if (data) {
         setUser(data as User);
+        localStorage.setItem('sniper_profile_cache', JSON.stringify(data)); // Cache Profile
+
+        // Fetch enrollments
         const { data: enrollData } = await supabase.from('enrollments').select('*').eq('user_id', userId);
         if (enrollData) setEnrollments(enrollData as Enrollment[]);
-        return data as User;
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
     }
-    return null;
-  };
+  }, []);
 
   const login = async (email: string, password: string): Promise<User | null> => {
     try {
-      // 1. Attempt Supabase Login
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
       if (error) throw error;
-      
       if (data.user) {
-          return await fetchProfile(data.user.id, data.user.email);
+          await fetchProfile(data.user.id, data.user.email);
+          return user; 
       }
       return null;
     } catch (err: any) {
@@ -128,19 +121,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const fetchCourses = async () => {
-    setCoursesLoading(true);
+  const fetchCourses = useCallback(async () => {
+    // Only show loading if we don't have courses yet
+    if (courses.length === 0) setCoursesLoading(true);
+    
     try {
       const { data, error } = await supabase.from('courses').select('*').order('created_at', { ascending: false });
-      if (!error && data) setCourses(data as Course[]);
+      if (!error && data) {
+        setCourses(data as Course[]);
+        localStorage.setItem('sniper_courses_cache', JSON.stringify(data)); // Cache Courses
+      }
     } catch (e) {
       console.error("Courses fetch error:", e);
     } finally {
       setCoursesLoading(false);
     }
-  };
+  }, [courses.length]);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
       const { data } = await supabase
         .from('site_settings')
@@ -150,20 +148,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         .maybeSingle();
       
       if (data) {
-        setSiteSettings({
+        const mergedSettings = {
           ...defaultSettings,
           ...data,
           social_links: { ...defaultSettings.social_links, ...(data.social_links || {}) },
-          stats: { ...defaultSettings.stats, ...(data.stats || {}) },
           features_config: { ...defaultSettings.features_config, ...(data.features_config || {}) },
           content_config: { ...defaultSettings.content_config, ...(data.content_config || {}) },
-          home_features: data.home_features || defaultSettings.home_features
-        });
+          home_features: data.home_features || defaultSettings.home_features,
+          stats: { ...defaultSettings.stats, ...(data.stats || {}) }
+        };
+        
+        setSiteSettings(mergedSettings);
+        localStorage.setItem('sniper_settings_cache', JSON.stringify(mergedSettings)); // Cache Settings
       }
     } catch (e) {
       console.error("Settings fetch error:", e);
     }
-  };
+  }, []);
 
   const refreshEnrollments = async () => {
     if (user) {
@@ -174,20 +175,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const saveLessonProgress = async (lessonId: string, position: number, duration: number, isCompleted: boolean) => {
     if (!user) return;
-    await supabase.from('lesson_progress').upsert({
-      user_id: user.id,
-      lesson_id: lessonId,
-      position,
-      duration,
-      is_completed: isCompleted,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,lesson_id' });
+    try {
+      await supabase.from('lesson_progress').upsert({
+        user_id: user.id,
+        lesson_id: lessonId,
+        position,
+        duration,
+        is_completed: isCompleted,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'user_id,lesson_id' });
+    } catch (e) {
+      // Silent fail
+    }
   };
 
   const getLessonProgress = async (lessonId: string): Promise<LessonProgress | null> => {
     if (!user) return null;
-    const { data } = await supabase.from('lesson_progress').select('*').eq('user_id', user.id).eq('lesson_id', lessonId).single();
-    return data as LessonProgress;
+    try {
+      const { data } = await supabase.from('lesson_progress').select('*').eq('user_id', user.id).eq('lesson_id', lessonId).single();
+      return data as LessonProgress;
+    } catch {
+      return null;
+    }
   };
 
   const updateSettings = async (newSettings: Partial<SiteSettings>) => {
@@ -220,17 +229,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (result.error) throw result.error;
         
         if (result.data) {
-            setSiteSettings(prev => ({
-                ...prev,
+            const updated = {
+                ...siteSettings,
                 ...result.data,
-                social_links: { ...prev.social_links, ...(result.data.social_links || {}) },
-                features_config: { ...prev.features_config, ...(result.data.features_config || {}) },
-                content_config: { ...prev.content_config, ...(result.data.content_config || {}) },
-                home_features: result.data.home_features || prev.home_features
-            }));
+                social_links: { ...siteSettings.social_links, ...(result.data.social_links || {}) },
+                features_config: { ...siteSettings.features_config, ...(result.data.features_config || {}) },
+                content_config: { ...siteSettings.content_config, ...(result.data.content_config || {}) },
+                stats: { ...siteSettings.stats, ...(result.data.stats || {}) }
+            };
+            setSiteSettings(updated);
+            localStorage.setItem('sniper_settings_cache', JSON.stringify(updated));
         }
     } catch (error) {
-        console.error("Error updating settings:", error);
         throw error;
     }
   };
@@ -247,64 +257,67 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
         setUser(null);
         setEnrollments([]);
+        localStorage.removeItem('sniper_profile_cache'); // Clear profile cache
         await supabase.auth.signOut();
-        localStorage.removeItem('sb-access-token');
-        localStorage.removeItem('sb-refresh-token');
     } catch (e) {
         console.error("Sign out error:", e);
     }
   };
 
+  // INITIALIZATION LOGIC
   useEffect(() => {
-    // --- CACHE CLEARING LOGIC ---
+    // 0. Version Check (Clear cache if version mismatch)
     const currentVersion = localStorage.getItem('app_version');
     if (currentVersion !== APP_VERSION) {
-        console.log(`🚀 New version detected (${APP_VERSION}). Clearing stale cache...`);
-        const sbKey = Object.keys(localStorage).find(key => key.startsWith('sb-'));
-        const sbSession = sbKey ? localStorage.getItem(sbKey) : null;
-        localStorage.clear();
-        if (sbKey && sbSession) localStorage.setItem(sbKey, sbSession);
+        localStorage.clear(); // Wipe old cache
         localStorage.setItem('app_version', APP_VERSION);
     }
+
+    // 1. Load from Cache IMMEDIATELY
+    loadFromCache();
     
     let mounted = true;
+    
+    // 2. Fetch Fresh Data (Background)
     const initializeApp = async () => {
         try {
-            fetchCourses(); 
-            await fetchSettings();
+            await Promise.all([fetchCourses(), fetchSettings()]);
+            
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user) {
                 await fetchProfile(session.user.id, session.user.email);
             }
         } catch (e) {
-            console.error("Initialization error:", e);
+            console.error("Init Error:", e);
         } finally {
             if (mounted) setLoading(false);
         }
     };
+    
     initializeApp();
     
-    const safetyTimer = setTimeout(() => { 
-        if (mounted && loading) setLoading(false); 
-    }, 4000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user && !user) {
-          await fetchProfile(session.user.id, session.user.email);
+      if (event === 'SIGNED_IN' && session?.user) {
+          if (!user || user.id !== session.user.id) {
+             await fetchProfile(session.user.id, session.user.email);
+          }
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
         setEnrollments([]);
+        localStorage.removeItem('sniper_profile_cache');
       }
     });
-    return () => { mounted = false; clearTimeout(safetyTimer); subscription.unsubscribe(); };
+    
+    return () => { mounted = false; subscription.unsubscribe(); };
   }, []);
 
   const value = useMemo(() => ({
     user, loading, courses, enrollments, siteSettings, 
     refreshCourses: fetchCourses, refreshEnrollments, updateSettings, 
     login, signOut, checkAccess, saveLessonProgress, getLessonProgress,
-    coursesLoading
-  }), [user, loading, courses, enrollments, siteSettings, coursesLoading]);
+    coursesLoading,
+    refreshData: () => { fetchCourses(); fetchSettings(); }
+  }), [user, loading, courses, enrollments, siteSettings, coursesLoading, fetchCourses, fetchSettings]);
 
   return (
     <StoreContext.Provider value={value}>
